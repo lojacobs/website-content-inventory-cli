@@ -1,0 +1,35 @@
+# ─── Beads (local issue tracker) ────────────────────────────────────────────
+# Remove this line if you want to make the roadmap public later
+.beads/
+.dolt/
+*.db
+.beads-credential-key
+
+# ─── Claude Code (local/private settings) ────────────────────────────────────
+# Remove these lines to share Claude hooks and agent skills with contributors
+.claude/
+CLAUDE.md
+AGENTS.md
+
+# ─── Docs & planning (internal for now) ──────────────────────────────────────
+# Remove this line to publish specs, plans, and inspiration files
+docs/
+
+# ─── Setup scripts (one-time use) ────────────────────────────────────────────
+create-beads.sh
+create-beads.log
+
+# ─── Build artifacts ──────────────────────────────────────────────────────────
+packages/*/dist/
+**/node_modules/
+coverage/
+*.tsbuildinfo
+
+# ─── Environment / secrets ────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ─── OS ───────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
