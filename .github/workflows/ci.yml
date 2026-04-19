@@ -1,0 +1,57 @@
+# CI Pipeline
+# Runs on every push to main and on all pull requests.
+#
+# What runs in CI:
+#   - pnpm install (frozen lockfile)
+#   - pnpm -r build  (build all packages)
+#   - pnpm -r test   (unit/integration tests for all packages)
+#
+# What does NOT run in CI (manual-only):
+#   - e2e tests — these require real external credentials (CMS API keys,
+#     database connections, etc.) that are not available in CI.
+#     Run locally with: pnpm -r test:e2e
+#
+# Local setup:
+#   1. Install Node 20 and pnpm: npm install -g pnpm
+#   2. pnpm install
+#   3. pnpm -r build
+#   4. pnpm -r test
+#   5. For e2e: copy .env.example to .env, fill in credentials, then pnpm -r test:e2e
+
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  build-and-test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'  # cache the npm global store used by pnpm
+
+      - name: Install pnpm
+        run: npm install -g pnpm
+
+      - name: Install dependencies (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: Build all packages
+        run: pnpm -r build
+
+      - name: Test all packages
+        run: pnpm -r test
+        # NOTE: e2e tests are intentionally excluded here.
+        # They require real credentials and must be run manually.
+        # See the comment at the top of this file for details.

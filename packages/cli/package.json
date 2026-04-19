@@ -1,0 +1,26 @@
+{
+  "name": "@fci/cli",
+  "version": "0.1.0",
+  "description": "CLI entry points for full-content-inventory",
+  "type": "module",
+  "bin": {
+    "fci": "./dist/index.js",
+    "fci-crawl": "./dist/crawl.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test:e2e": "vitest run tests/e2e.test.ts"
+  },
+  "dependencies": {
+    "@fci/shared": "workspace:*",
+    "@fci/crawler": "workspace:*",
+    "@fci/ai-summarizer": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "@types/node": "^20.0.0",
+    "vitest": "^1.6.0",
+    "tsx": "^4.0.0"
+  }
+}
