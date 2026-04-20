@@ -1,0 +1,29 @@
+{
+  "name": "@full-content-inventory/cli",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Command-line interface for the full content inventory system",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "inventory": "./dist/index.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo"
+  },
+  "dependencies": {
+    "@full-content-inventory/crawler": "workspace:*",
+    "@full-content-inventory/shared": "workspace:*",
+    "@full-content-inventory/ai-summarizer": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  }
+}

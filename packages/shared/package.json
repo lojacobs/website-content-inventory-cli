@@ -1,0 +1,25 @@
+{
+  "name": "@full-content-inventory/shared",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Shared types, utilities, and constants",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo"
+  },
+  "dependencies": {
+    "csv-parse": "^6.2.1",
+    "csv-stringify": "^6.7.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  }
+}

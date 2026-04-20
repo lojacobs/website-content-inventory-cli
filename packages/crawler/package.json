@@ -1,0 +1,25 @@
+{
+  "name": "@full-content-inventory/crawler",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Web crawler with content extraction, sanitization, and injection detection",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo"
+  },
+  "dependencies": {
+    "@full-content-inventory/shared": "workspace:*",
+    "cheerio": "^1.2.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  }
+}
