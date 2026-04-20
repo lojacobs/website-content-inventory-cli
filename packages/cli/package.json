@@ -10,7 +10,7 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "test:e2e": "vitest run tests/e2e.test.ts"
+    "test:e2e": "tsx tests/e2e-full.ts"
   },
   "dependencies": {
     "@fci/shared": "workspace:*",
@@ -22,7 +22,6 @@
   "devDependencies": {
     "typescript": "^5.4.0",
     "@types/node": "^20.0.0",
-    "vitest": "^1.6.0",
     "tsx": "^4.0.0"
   }
 }
