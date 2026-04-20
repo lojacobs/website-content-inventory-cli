@@ -46,13 +46,20 @@ function computeUrlDepth(urlString: string): number {
  *
  * Field mappings:
  * - url → URL
- * - title (if available) → Titre
+ * - title → Titre
+ * - description → Description
  * - page_type → Type_de_page
  * - word_count → Nb_mots
  * - summary (first 200 chars) → Resume_200_chars
+ * - http_status → Statut_HTTP
+ * - language → Langue
+ * - date_modified → Date_modifiee
+ * - canonical → Canonical
+ * - noindex → Noindex (as "true"/"false")
+ * - image_count → Nb_images
+ * - linked_files → Fichiers_liés
  * - doc_id → Lien_Google_Doc (as full Google Docs URL)
  * - driveFolderLink (provided separately) → Lien_dossier_Drive
- * - Other columns (Description, Statut_HTTP, Langue, Date_modifiee, Canonical, Noindex, Nb_images, Fichiers_liés) → empty
  * - Profondeur_URL → computed from URL depth
  */
 export function transformToPublicSchema(
@@ -72,18 +79,18 @@ export function transformToPublicSchema(
   return {
     URL: row.url || "",
     Titre: row.title || "",
-    Description: "",
+    Description: row.description || "",
     Resume_200_chars: resume200Chars,
     Type_de_page: row.page_type || "",
     Profondeur_URL: String(urlDepth),
     Nb_mots: row.word_count ? String(row.word_count) : "",
-    Statut_HTTP: "",
-    Langue: "",
-    Date_modifiee: "",
-    Canonical: "",
-    Noindex: "",
-    Nb_images: "",
-    Fichiers_liés: "",
+    Statut_HTTP: row.http_status ? String(row.http_status) : "",
+    Langue: row.language || "",
+    Date_modifiee: row.date_modified || "",
+    Canonical: row.canonical || "",
+    Noindex: row.noindex !== undefined ? (row.noindex ? "true" : "false") : "",
+    Nb_images: row.image_count !== undefined ? String(row.image_count) : "",
+    Fichiers_liés: row.linked_files || "",
     Lien_Google_Doc: googleDocLink,
     Lien_dossier_Drive: driveFolderLink,
   };

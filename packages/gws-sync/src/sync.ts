@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { parse } from "node:path";
 import type { InventoryRow, SyncConfig } from "@fci/shared";
+import { readInventory, writeInventory } from "@fci/shared";
 import { mirrorFolderTree } from "./folder-mirror.js";
 import { uploadAsDoc, updateDoc } from "./doc-upload.js";
 import { replaceImagesInDoc } from "./image-replacement.js";
@@ -69,7 +70,7 @@ function rowsToCSV(rows: InventoryRow[]): string {
 }
 
 function writeCSV(csvPath: string, rows: InventoryRow[]): void {
-  fs.writeFileSync(csvPath, rowsToCSV(rows), "utf8");
+  writeInventory(csvPath, rows);
 }
 
 // ---------------------------------------------------------------------------
@@ -92,9 +93,8 @@ function writeCSV(csvPath: string, rows: InventoryRow[]): void {
 export async function sync(config: SyncConfig): Promise<void> {
   const { inventoryPath, driveRootFolderId, clientName, projectName } = config;
 
-  // Read + parse inventory
-  const csvText = fs.readFileSync(inventoryPath, "utf8");
-  const rows = parseCSV(csvText);
+  // Read + parse inventory (using @fci/shared which handles the new schema)
+  const rows = await readInventory(inventoryPath);
 
   const unsynced = rows.filter((r) => r.sync_status !== "done");
 
