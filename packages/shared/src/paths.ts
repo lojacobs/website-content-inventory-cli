@@ -2,8 +2,9 @@
  * Path utilities for URL and file system operations
  */
 
-import fs from 'fs/promises';
-import path from 'path';
+import { URL } from 'node:url';
+import { dirname } from 'node:path';
+import { access, mkdir } from 'node:fs/promises';
 
 /**
  * Convert a URL to a relative file path
@@ -53,15 +54,15 @@ export function sanitizePath(input: string): string {
 }
 
 /**
- * Ensure a directory exists, creating it if necessary
- * Similar to mkdir -p
+ * Ensures a directory exists, creating it if necessary.
+ * Uses async fs operations for Node.js environment.
  */
 export async function ensureDir(dirPath: string): Promise<void> {
   try {
-    await fs.access(dirPath);
+    await access(dirPath);
   } catch {
     // Directory doesn't exist, create it recursively
-    await fs.mkdir(dirPath, { recursive: true });
+    await mkdir(dirPath, { recursive: true });
   }
 }
 
@@ -69,7 +70,7 @@ export async function ensureDir(dirPath: string): Promise<void> {
  * Get the directory portion of a file path and ensure it exists
  */
 export async function ensureDirForFile(filePath: string): Promise<void> {
-  const dir = path.dirname(filePath);
+  const dir = dirname(filePath);
   if (dir && dir !== '.') {
     await ensureDir(dir);
   }

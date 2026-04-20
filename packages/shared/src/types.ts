@@ -81,4 +81,20 @@ export interface InventoryRow {
 /**
  * Type representing any column name in the inventory
  */
-export type InventoryColumn = typeof INVENTORY_COLUMNS[number];
+export type InventoryColumn =
+  | 'URL'
+  | 'Titre'
+  | 'Description'
+  | 'Resume_200_chars'
+  | 'Type_de_page'
+  | 'Profondeur_URL'
+  | 'Nb_mots'
+  | 'Statut_HTTP'
+  | 'Langue'
+  | 'Date_modifiee'
+  | 'Canonical'
+  | 'Noindex'
+  | 'Nb_images'
+  | 'Fichiers_liés'
+  | 'Lien_Google_Doc'
+  | 'Lien_dossier_Drive';
