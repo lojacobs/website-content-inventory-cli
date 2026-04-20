@@ -99,7 +99,7 @@ export async function downloadPage(
     const { stderr } = await execAsync(wgetArgs.join(' '), {
       timeout: (timeout + 5) * 1000,
       // Prevent shell injection by limiting env
-      env: { PATH: '/usr/local/bin:/usr/bin:/bin' },
+      env: { PATH: '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin' },
     });
 
     // Parse HTTP status from wget's stderr response header

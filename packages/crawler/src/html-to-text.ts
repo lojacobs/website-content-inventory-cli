@@ -37,7 +37,7 @@ export function htmlToText(html: string, options: HtmlToTextOptions = {}): strin
     fence: '```',
     emDelimiter: '_',
     strongDelimiter: '**',
-    linkStyle: keepLinks ? 'inlined' : 'discarded',
+    linkStyle: 'inlined',
     br: preserveLineBreaks ? '\n' : ' ',
   });
 
@@ -46,7 +46,7 @@ export function htmlToText(html: string, options: HtmlToTextOptions = {}): strin
     filter: 'img',
     replacement: (_content, node) => {
       if (!keepImageAlt) return '';
-      const img = node as HTMLImageElement;
+      const img = node as any;
       const alt = img.getAttribute ? img.getAttribute('alt') : '';
       return alt ? `[Image: ${alt}]` : '';
     },

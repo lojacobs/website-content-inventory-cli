@@ -11,6 +11,7 @@
  */
 
 import * as cheerio from 'cheerio';
+import type { AnyNode, Element, Text } from 'domhandler';
 
 /**
  * Convert HTML to plain text with structured markers.
@@ -18,16 +19,16 @@ import * as cheerio from 'cheerio';
 export function htmlToText(html: string): string {
   const $ = cheerio.load(html);
 
-  function processNode(node: cheerio.AnyNode): string {
+  function processNode(node: AnyNode): string {
     if (node.type === 'text') {
-      return (node as cheerio.Text).data ?? '';
+      return (node as Text).data ?? '';
     }
 
     if (node.type !== 'tag') {
       return '';
     }
 
-    const el = node as cheerio.Element;
+    const el = node as Element;
     const tag = el.name.toLowerCase();
     const children = el.children ?? [];
 

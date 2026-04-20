@@ -6,6 +6,7 @@
  */
 
 import * as cheerio from 'cheerio';
+import type { Element, AnyNode } from 'domhandler';
 
 /**
  * Tag-level selectors to remove entirely (including their children).
@@ -91,7 +92,7 @@ function matchesUiPattern(classAttr: string, idAttr: string): boolean {
  * @returns Sanitized HTML string
  */
 export function sanitizeHtml(html: string): string {
-  const $ = cheerio.load(html, { decodeEntities: true });
+  const $ = cheerio.load(html);
 
   // 1. Remove tag-level elements unconditionally
   $(REMOVE_SELECTORS.join(', ')).remove();
@@ -109,7 +110,7 @@ export function sanitizeHtml(html: string): string {
   // 3. Remove HTML comments
   $('*').contents().each((_i, node) => {
     if (node.type === 'comment') {
-      $(node as cheerio.AnyNode).remove();
+      $(node as AnyNode).remove();
     }
   });
 
@@ -117,7 +118,7 @@ export function sanitizeHtml(html: string): string {
   $('img').each((_i, el) => {
     const src = $(el).attr('src');
     const alt = $(el).attr('alt');
-    const attrs = Object.keys((el as cheerio.Element & { attribs: Record<string, string> }).attribs ?? {});
+    const attrs = Object.keys((el as Element & { attribs: Record<string, string> }).attribs ?? {});
     attrs.forEach(attr => $(el).removeAttr(attr));
     if (src) $(el).attr('src', src);
     if (alt !== undefined) $(el).attr('alt', alt);
@@ -126,7 +127,7 @@ export function sanitizeHtml(html: string): string {
   // 5. Sanitize <a> — keep only href, strip JS links
   $('a').each((_i, el) => {
     const href = $(el).attr('href') ?? '';
-    const attrs = Object.keys((el as cheerio.Element & { attribs: Record<string, string> }).attribs ?? {});
+    const attrs = Object.keys((el as Element & { attribs: Record<string, string> }).attribs ?? {});
     attrs.forEach(attr => $(el).removeAttr(attr));
     if (href && !/^\s*(javascript:|data:)/i.test(href)) {
       $(el).attr('href', href);
@@ -136,9 +137,9 @@ export function sanitizeHtml(html: string): string {
   // 6. Strip all attributes from remaining elements
   $('*').each((_i, el) => {
     if (el.type !== 'tag') return;
-    const tag = (el as cheerio.Element).tagName?.toLowerCase();
+    const tag = (el as Element).tagName?.toLowerCase();
     if (tag === 'img' || tag === 'a') return; // already handled
-    const attrs = Object.keys((el as cheerio.Element & { attribs: Record<string, string> }).attribs ?? {});
+    const attrs = Object.keys((el as Element & { attribs: Record<string, string> }).attribs ?? {});
     attrs.forEach(attr => $(el).removeAttr(attr));
   });
 

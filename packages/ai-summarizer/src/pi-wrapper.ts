@@ -1,74 +1,73 @@
-/**
- * Pi SDK wrapper — factory that creates a one-shot prompt runner.
- *
- * Uses @mariozechner/pi-coding-agent SDK:
- *   - AuthStorage  : loads saved Pi credentials from disk
- *   - createAgentSession : creates a streaming agent session
- *   - DefaultResourceLoader : supplies the system prompt as a resource
- *
- * No global `pi` binary is required.
- */
-
+import os from 'os';
+import path from 'path';
 import {
   AuthStorage,
+  ModelRegistry,
   createAgentSession,
-  DefaultResourceLoader,
 } from "@mariozechner/pi-coding-agent";
 
-/**
- * Build a reusable `runPrompt` function bound to a fixed system prompt.
- *
- * @param systemPrompt - The system-level instruction for every call.
- * @returns An async function that accepts a user prompt and returns the
- *          full text response as a string.
- *
- * @example
- * ```ts
- * const runPrompt = buildRunPrompt("You are a helpful assistant.");
- * const answer = await runPrompt("Summarise this page: ...");
- * ```
- */
+const AUTH_PATH = path.join(os.homedir(), '.pi', 'agent', 'auth.json');
+const MODELS_PATH = path.join(os.homedir(), '.pi', 'agent', 'models.json');
+const AGENT_DIR = path.join(os.homedir(), '.pi', 'agent');
+
+const DEFAULT_PROVIDER = 'opencode-go';
+const DEFAULT_MODEL_ID = 'minimax-m2.5';
+
 export function buildRunPrompt(
-  systemPrompt: string
+  systemPrompt: string,
+  providerName = DEFAULT_PROVIDER,
+  modelId = DEFAULT_MODEL_ID
 ): (userPrompt: string) => Promise<string> {
   return async function runPrompt(userPrompt: string): Promise<string> {
-    // Load credentials that were saved by `pi auth login` (or equivalent).
-    const auth = await AuthStorage.load();
+    const authStorage = AuthStorage.create(AUTH_PATH);
 
-    // Provide the system prompt as a named resource the SDK can inject.
-    const resourceLoader = new DefaultResourceLoader({
-      "system-prompt": systemPrompt,
+    const registry = ModelRegistry.create(authStorage, MODELS_PATH);
+    const model = registry.find(providerName, modelId);
+
+    if (!model) {
+      throw new Error(
+        `Model "${providerName}/${modelId}" not found in registry. ` +
+        `Available: ${registry.getAll().map(m => `${m.provider}/${m.id}`).join(', ')}`
+      );
+    }
+
+    const { session } = await createAgentSession({
+      authStorage,
+      model,
+      agentDir: AGENT_DIR,
     });
 
-    // Open a streaming session.
-    const session = await createAgentSession({
-      auth,
-      resourceLoader,
-      systemPrompt,
-    });
-
-    // Collect all text_delta chunks into one string.
     const chunks: string[] = [];
+    let agentEnded = false;
 
-    await new Promise<void>((resolve, reject) => {
-      session.on("text_delta", (delta: { text: string }) => {
-        chunks.push(delta.text);
+    return new Promise<string>((resolve, reject) => {
+      // Subscribe to session events
+      const unsubscribe = session.subscribe((event: any) => {
+        try {
+          if (event.type === 'message_end') {
+            // Extract text from message content
+            const textParts = event.message.content
+              .filter((c: any) => c.type === 'text')
+              .map((c: any) => (c as any).text);
+            chunks.push(...textParts);
+          } else if (event.type === 'agent_end') {
+            // Agent has finished processing
+            agentEnded = true;
+            unsubscribe();
+            resolve(chunks.join(''));
+          }
+        } catch (err) {
+          unsubscribe();
+          reject(err);
+        }
       });
 
-      session.on("error", (err: Error) => {
+      // Send the message with system prompt prepended
+      const messageToSend = `<system>${systemPrompt}</system>\n\n${userPrompt}`;
+      session.sendUserMessage(messageToSend).catch((err: Error) => {
+        unsubscribe();
         reject(err);
       });
-
-      session.on("done", () => {
-        resolve();
-      });
-
-      // Send the user message to kick off generation.
-      session.send(userPrompt).catch(reject);
     });
-
-    await session.close?.();
-
-    return chunks.join("");
   };
 }

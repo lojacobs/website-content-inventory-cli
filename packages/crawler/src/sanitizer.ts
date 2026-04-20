@@ -84,7 +84,7 @@ const UNWRAP_TAGS = [
 export function sanitizeHtml(rawHtml: string, options: SanitizeOptions = {}): string {
   const { keepImages = true, keepLinks = true } = options;
 
-  const $ = cheerio.load(rawHtml, { decodeEntities: true });
+  const $ = cheerio.load(rawHtml);
 
   // 1. Remove entirely unwanted tags (scripts, styles, etc.)
   $(STRIP_TAGS.join(', ')).remove();
@@ -142,7 +142,7 @@ export function sanitizeHtml(rawHtml: string, options: SanitizeOptions = {}): st
            .removeAttr('onclick').removeAttr('onmouseover');
     });
   } else {
-    $('a').each((_i, el) => $(el).replaceWith($(el).contents()));
+    $('a').each((_i, el) => { $(el).replaceWith($(el).contents()); });
   }
 
   // 6. Strip style/on* attributes from all remaining elements
@@ -150,7 +150,7 @@ export function sanitizeHtml(rawHtml: string, options: SanitizeOptions = {}): st
     if (el.type !== 'tag') return;
     $(el).removeAttr('style').removeAttr('class').removeAttr('id');
     // Remove all event handlers
-    const attrs = Object.keys((el as cheerio.Element & { attribs: Record<string, string> }).attribs || {});
+    const attrs = Object.keys((el as any).attribs || {});
     attrs.forEach(attr => {
       if (attr.startsWith('on')) $(el).removeAttr(attr);
     });
