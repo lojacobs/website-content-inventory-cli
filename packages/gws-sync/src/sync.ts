@@ -110,12 +110,64 @@ export async function sync(config: SyncConfig): Promise<void> {
       .filter((r) => r.local_path)
       .map((r) => path.dirname(r.local_path));
 
-    const folderMap = await mirrorFolderTree(allLocalPaths, driveRootFolderId);
+    // Compute relative Drive paths from URLs and local paths
+    const localToRelativePaths = new Map<string, string>();
+    for (const row of rows) {
+      if (!row.local_path || !row.url) continue;
+
+      const localDir = path.dirname(row.local_path);
+      const outputDir = path.dirname(inventoryPath);
+
+      // Strip the output directory prefix to get the relative path
+      let relativePath = localDir.startsWith(outputDir)
+        ? localDir.slice(outputDir.length).replace(/^\//, "")
+        : localDir;
+
+      // Extract domain from URL and remove www. prefix
+      let domain = "";
+      try {
+        const url = new URL(row.url);
+        domain = url.hostname.replace(/^www\./, "");
+      } catch {
+        // Fallback: use first segment of relative path
+        domain = relativePath.split(path.sep)[0] ?? "";
+      }
+
+      // Build Drive folder structure: {client}_{project}/{domain}/{path/to/page}
+      if (domain && relativePath) {
+        // Extract path after domain in the relative path
+        const parts = relativePath.split(path.sep);
+        const domainIndex = parts.findIndex(
+          (p) => p === domain || p === `www.${domain}`
+        );
+        const pathAfterDomain =
+          domainIndex >= 0 ? parts.slice(domainIndex + 1) : parts.slice(1);
+
+        relativePath = [clientName, projectName, domain, ...pathAfterDomain].join(
+          path.sep
+        );
+      } else {
+        // Fallback: prefix with client_project
+        relativePath = [clientName, projectName, relativePath]
+          .filter(Boolean)
+          .join(path.sep);
+      }
+
+      localToRelativePaths.set(localDir, relativePath);
+    }
+
+    // Convert local paths to relative paths for mirroring
+    const relativePaths = allLocalPaths.map(
+      (p) => localToRelativePaths.get(p) ?? p
+    );
+
+    const folderMap = await mirrorFolderTree(relativePaths, driveRootFolderId);
 
     // Helper: resolve drive folder id for a given local file
     const getDriveFolderId = (localFilePath: string): string => {
       const dir = path.dirname(localFilePath);
-      return folderMap.get(dir) ?? driveRootFolderId;
+      const relativeDir = localToRelativePaths.get(dir) ?? dir;
+      return folderMap.get(relativeDir) ?? driveRootFolderId;
     };
 
     // Process each unsynced row
