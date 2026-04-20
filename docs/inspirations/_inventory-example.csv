@@ -1,0 +1,2 @@
+URL,Titre,Description,Resume_200_chars,Type_de_page,Profondeur_URL,Nb_mots,Statut_HTTP,Langue,Date_modifiee,Canonical,Noindex,Nb_images,Fichiers_liés,Lien_Google_Doc,Lien_dossier_Drive
+test.com,"Titre de la page de test","La meta-description de la page de test","C'est une page d'actualité qui n'a pas de contenu sauf du Lorem ipsum et une photo.","news",2,542,200,"français",20260328,na,false,1,0,"https://drive.google.com/document/d/890uKHh8","https://drive.google.com/drive/folders/124b32ih423"
