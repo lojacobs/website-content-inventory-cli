@@ -10,3 +10,13 @@ export {
   type DownloadResult,
   DownloadBlockedError,
 } from "./download.js";
+
+export {
+  extractMeta,
+  type PageMeta,
+  type MetaOptions,
+} from "./meta.js";
+
+export {
+  htmlToText,
+} from "./convert.js";
