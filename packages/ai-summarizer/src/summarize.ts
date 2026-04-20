@@ -1,13 +1,13 @@
 /**
  * summarize.ts
- * Orchestrator: reads inventory CSV, runs classify + summary in parallel
- * for each eligible row, and upserts results back to CSV.
+ * Orchestrateur: lit _inventory.csv, exécute classify + summary en // pour chaque ligne,
+ * réécrit les résultats dans le CSV puis recharge la Google Sheet.
  */
 
 import fs from 'fs/promises';
 import path from 'path';
-import { stringify } from 'csv-stringify/sync';
-import type { SummarizeConfig, InventoryRow, PipelineStatus } from '@fci/shared';
+import { readInventory, writeInventory } from '@fci/shared';
+import { updateSheet, transformInventoryToPublicCSV } from '@fci/gws-sync';
 import {
   buildRunPrompt,
   PAGE_TYPE_SYSTEM_PROMPT,
@@ -15,107 +15,24 @@ import {
   buildPageTypeUserContent,
   buildSummaryUserContent,
 } from './index.js';
+import type { SummarizeConfig, InventoryRow } from '@fci/shared';
 
-const CSV_HEADERS: (keyof InventoryRow)[] = [
-  'url',
-  'local_path',
-  'crawl_status',
-  'sync_status',
-  'ai_status',
-  'doc_id',
-  'sheet_id',
-  'title',
-  'word_count',
-  'page_type',
-  'summary',
-];
-
-/** Parse a CSV file into an array of InventoryRow objects. */
-async function readInventoryCsv(csvPath: string): Promise<InventoryRow[]> {
-  const content = await fs.readFile(csvPath, 'utf8');
-  const lines = content.split('\n');
-  if (lines.length === 0) return [];
-
-  const header = parseCSVLine(lines[0]);
-  const rows: InventoryRow[] = [];
-
-  for (let i = 1; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (!line) continue;
-    const values = parseCSVLine(line);
-    const row: Record<string, string> = {};
-    header.forEach((col, idx) => {
-      row[col] = values[idx] ?? '';
-    });
-    rows.push({
-      url: row['url'] ?? '',
-      local_path: row['local_path'] ?? '',
-      crawl_status: (row['crawl_status'] as PipelineStatus) ?? 'pending',
-      sync_status: (row['sync_status'] as PipelineStatus) ?? 'pending',
-      ai_status: (row['ai_status'] as PipelineStatus) ?? 'pending',
-      doc_id: row['doc_id'] || undefined,
-      sheet_id: row['sheet_id'] || undefined,
-      title: row['title'] || undefined,
-      word_count: row['word_count'] ? Number(row['word_count']) : undefined,
-      page_type: row['page_type'] || undefined,
-      summary: row['summary'] || undefined,
-    });
-  }
-
-  return rows;
-}
-
-/** Minimal CSV line parser that handles double-quoted fields. */
-function parseCSVLine(line: string): string[] {
-  const result: string[] = [];
-  let current = '';
-  let inQuotes = false;
-
-  for (let i = 0; i < line.length; i++) {
-    const ch = line[i];
-    if (ch === '"') {
-      if (inQuotes && line[i + 1] === '"') {
-        current += '"';
-        i++;
-      } else {
-        inQuotes = !inQuotes;
-      }
-    } else if (ch === ',' && !inQuotes) {
-      result.push(current);
-      current = '';
-    } else {
-      current += ch;
-    }
-  }
-  result.push(current);
-  return result;
-}
-
-/** Serialize InventoryRow array back to CSV string. */
-function serializeInventoryCsv(rows: InventoryRow[]): string {
-  const header = stringify([CSV_HEADERS]);
-  const dataRows = rows.map(row =>
-    stringify([CSV_HEADERS.map(h => {
-      const val = row[h];
-      return val === undefined || val === null ? '' : String(val);
-    })])
-  );
-  return header + dataRows.join('');
-}
-
-/** Process a single row: classify + summarize in parallel, mutate in place. */
-async function processRow(row: InventoryRow, provider?: string, model?: string): Promise<void> {
-  const textPath = row.local_path.replace(/\.html?$/i, '.txt');
+/** Traite une ligne: classify + summarize en parallèle, modifie la ligne en place. */
+async function processRow(
+  row: InventoryRow,
+  provider?: string,
+  model?: string
+): Promise<void> {
+  const textPath = row.local_path?.replace(/\.html?$/i, '.txt') ?? '';
 
   let text: string;
   try {
     text = await fs.readFile(textPath, 'utf8');
   } catch {
-    // Fall back to local_path itself if .txt variant doesn't exist
     try {
-      text = await fs.readFile(row.local_path, 'utf8');
+      text = await fs.readFile(row.local_path ?? '', 'utf8');
     } catch (err) {
-      throw new Error(`Cannot read text file for ${row.url}: ${String(err)}`);
+      throw new Error(`Impossible de lire le fichier texte pour ${row.url}: ${String(err)}`);
     }
   }
 
@@ -132,7 +49,7 @@ async function processRow(row: InventoryRow, provider?: string, model?: string):
   row.ai_status = 'done';
 }
 
-/** Run at most `concurrency` promises at a time from a task factory list. */
+/** Exécute au plus `concurrency` promesses en parallèle. */
 async function runWithConcurrency<T>(
   tasks: Array<() => Promise<T>>,
   concurrency: number
@@ -147,26 +64,29 @@ async function runWithConcurrency<T>(
     }
   }
 
-  const workers = Array.from({ length: Math.min(concurrency, tasks.length) }, () => worker());
+  const workers = Array.from(
+    { length: Math.min(concurrency, tasks.length) },
+    () => worker()
+  );
   await Promise.all(workers);
   return results;
 }
 
 /**
- * Main orchestrator entry point.
+ * Orchestrateur principal.
  *
- * Reads the inventory CSV, processes rows where crawl_status === 'done'
- * and ai_status !== 'done', runs classify + summary in parallel per row,
- * and writes results back after each batch.
+ * Lit _inventory.csv, traite les lignes où crawl_status === 'done' et ai_status !== 'done',
+ * exécute classify + summary en //, réécrit les résultats dans le CSV,
+ * puis recharge la Google Sheet avec le contenu à jour.
  */
 export async function summarize(config: SummarizeConfig): Promise<void> {
   const { inventoryPath, provider, model, maxConcurrency = 3 } = config;
   const csvPath = path.resolve(inventoryPath);
 
-  const rows = await readInventoryCsv(csvPath);
+  const rows = await readInventory(csvPath);
 
   const eligible = rows.filter(
-    r => r.crawl_status === 'done' && r.ai_status !== 'done'
+    (r) => r.crawl_status === 'done' && r.ai_status !== 'done'
   );
 
   if (eligible.length === 0) {
@@ -174,17 +94,15 @@ export async function summarize(config: SummarizeConfig): Promise<void> {
     return;
   }
 
-  console.log(`Processing ${eligible.length} rows with concurrency ${maxConcurrency}...`);
+  console.log(
+    `Processing ${eligible.length} row(s) with concurrency ${maxConcurrency}...`
+  );
 
-  // Process in batches of maxConcurrency, writing to CSV after each batch
-  let processed = 0;
-  const batches: InventoryRow[][] = [];
+  // Traite par lots de maxConcurrency
   for (let i = 0; i < eligible.length; i += maxConcurrency) {
-    batches.push(eligible.slice(i, i + maxConcurrency));
-  }
+    const batch = eligible.slice(i, i + maxConcurrency);
 
-  for (const batch of batches) {
-    const tasks = batch.map(row => async () => {
+    const tasks = batch.map((row) => async () => {
       try {
         await processRow(row, provider, model);
         console.log(`  [done] ${row.url}`);
@@ -195,13 +113,48 @@ export async function summarize(config: SummarizeConfig): Promise<void> {
     });
 
     await runWithConcurrency(tasks, maxConcurrency);
-    processed += batch.length;
 
-    // Upsert: write all rows back (eligible ones are mutated in place)
-    const csv = serializeInventoryCsv(rows);
-    await fs.writeFile(csvPath, csv, 'utf8');
-    console.log(`Progress: ${processed}/${eligible.length}`);
+    // Réécrit le CSV local avec les résultats AI
+    await writeInventory(csvPath, rows);
+    console.log(`  Written to CSV: ${csvPath}`);
   }
 
-  console.log('Summarization complete.');
+  // Phase 2: Recharger la Google Sheet avec le contenu mis à jour
+  // Relit le sheet_id depuis le CSV (écrit par fci-sync)
+  const sheetId = rows.find((r) => r.sheet_id)?.sheet_id;
+
+  if (sheetId) {
+    console.log(`\nUpdating Google Sheet ${sheetId}...`);
+
+    // Construire la map des Drive folder links (optionnel — non utilisé ici
+    // car on met à jour la sheet existante, pas une nouvelle)
+    const driveFolderLinkMap = new Map<string, string>();
+
+    // Génère le CSV public schema avec les nouvelles valeurs page_type + summary
+    const publicCSV = transformInventoryToPublicCSV(rows, driveFolderLinkMap);
+
+    // Écrit dans un fichier temporaire
+    const tempCsvPath = path.join(
+      path.dirname(csvPath),
+      '_summarize_temp_sheet.csv'
+    );
+    await fs.writeFile(tempCsvPath, publicCSV, 'utf8');
+
+    try {
+      await updateSheet(sheetId, tempCsvPath);
+      console.log(`  ✅ Sheet mise à jour: https://docs.google.com/spreadsheets/d/${sheetId}/edit`);
+    } catch (err) {
+      console.error(`  ❌ Échec mise à jour sheet: ${String(err)}`);
+      // Ne pas propagerr l'erreur — le CSV local est déjà à jour
+    } finally {
+      await fs.unlink(tempCsvPath).catch(() => undefined);
+    }
+  } else {
+    console.log(
+      `\n⚠️  sheet_id non trouvé dans le CSV — impossible de recharger la Google Sheet.\n` +
+      `   Exécutez fci-sync après fci-summarize pour mettre à jour la sheet.`
+    );
+  }
+
+  console.log('\nSummarization complete.');
 }

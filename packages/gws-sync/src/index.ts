@@ -4,4 +4,5 @@ export { parseImageMarkers, replaceImagesInDoc } from "./image-replacement.js";
 export type { ImageMarker } from "./image-replacement.js";
 export { uploadAsSheet, updateSheet } from "./sheet-upload.js";
 export { sync } from "./sync.js";
+export { transformInventoryToPublicCSV } from "./schema-transform.js";
 export type { SyncConfig } from "@fci/shared";

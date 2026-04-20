@@ -10,6 +10,9 @@ importers:
 
   packages/ai-summarizer:
     dependencies:
+      '@fci/gws-sync':
+        specifier: workspace:*
+        version: link:../gws-sync
       '@fci/shared':
         specifier: workspace:*
         version: link:../shared
