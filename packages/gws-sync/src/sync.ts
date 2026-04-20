@@ -97,6 +97,9 @@ export async function sync(config: SyncConfig): Promise<void> {
 
   const unsynced = rows.filter((r) => r.sync_status !== "done");
 
+  // Initialize rootSubfolderId to the raw root, will be updated if folders are mirrored
+  let rootSubfolderId = driveRootFolderId;
+
   if (unsynced.length === 0) {
     console.log("All rows already synced. Nothing to do.");
   } else {
@@ -163,6 +166,17 @@ export async function sync(config: SyncConfig): Promise<void> {
 
     const folderMap = await mirrorFolderTree(relativePaths, driveRootFolderId);
 
+    // Extract the root {client}_{project} subfolder ID from the folderMap
+    // The first entry in folderMap is the root subfolder created during mirroring
+    const relativeFolderPaths = Array.from(folderMap.keys());
+    if (relativeFolderPaths.length > 0) {
+      const rootRelativePath = relativeFolderPaths[0];
+      const rootId = folderMap.get(rootRelativePath);
+      if (rootId) {
+        rootSubfolderId = rootId;
+      }
+    }
+
     // Helper: resolve drive folder id for a given local file
     const getDriveFolderId = (localFilePath: string): string => {
       const dir = path.dirname(localFilePath);
@@ -226,7 +240,7 @@ export async function sync(config: SyncConfig): Promise<void> {
 
   // Upload (or update) the inventory CSV as a Google Sheet
   console.log("Uploading inventory sheet...");
-  const inventorySheetName = `${clientName} — ${projectName} Inventory`;
+  const inventorySheetName = "_inventory";
 
   // Check if any row already has a sheet_id (written by a prior run)
   const existingSheetId = rows.find((r) => r.sheet_id)?.sheet_id;
@@ -240,7 +254,7 @@ export async function sync(config: SyncConfig): Promise<void> {
     const sheetUrl = await uploadAsSheet(
       inventoryPath,
       inventorySheetName,
-      driveRootFolderId
+      rootSubfolderId
     );
     const sheetId = sheetUrl.split("/d/")[1]?.split("/")[0] ?? "";
     // Persist sheet_id on all rows so future runs update in place
