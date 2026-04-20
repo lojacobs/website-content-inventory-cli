@@ -15,7 +15,9 @@
   "dependencies": {
     "@fci/shared": "workspace:*",
     "@fci/crawler": "workspace:*",
-    "@fci/ai-summarizer": "workspace:*"
+    "@fci/gws-sync": "workspace:*",
+    "@fci/ai-summarizer": "workspace:*",
+    "commander": "^12.0.0"
   },
   "devDependencies": {
     "typescript": "^5.4.0",
