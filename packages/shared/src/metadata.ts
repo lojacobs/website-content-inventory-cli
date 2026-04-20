@@ -14,7 +14,13 @@ const LINKED_FILE_EXTENSIONS = /\.(pdf|docx?|xlsx?|zip)(\?.*)?$/i;
 /**
  * Extract metadata from raw HTML content and a page URL.
  */
-export function extractMetadata(html: string, url: string): PageMetadata {
+export function extractMetadata(
+  html: string,
+  url: string,
+  options?: { httpStatus?: number; linkedFiles?: string[] },
+): PageMetadata {
+  const httpStatus = options?.httpStatus ?? 200;
+  const linkedFiles = options?.linkedFiles ?? [];
   const $ = cheerio.load(html);
 
   // Title: prefer <title> tag, fallback to first h1
@@ -45,14 +51,19 @@ export function extractMetadata(html: string, url: string): PageMetadata {
   // Image count
   const imageCount = $('img').length;
 
-  // Linked files: hrefs ending in .pdf, .doc, .docx, .xls, .xlsx, .zip
-  const linkedFiles: string[] = [];
-  $('a[href]').each((_, el) => {
-    const href = $(el).attr('href')?.trim() ?? '';
-    if (LINKED_FILE_EXTENSIONS.test(href)) {
-      linkedFiles.push(href);
-    }
-  });
+  // Linked files: use passed-in array if provided, otherwise extract from HTML
+  const finalLinkedFiles: string[] = linkedFiles.length > 0
+    ? linkedFiles
+    : (() => {
+        const found: string[] = [];
+        $('a[href]').each((_, el) => {
+          const href = $(el).attr('href')?.trim() ?? '';
+          if (LINKED_FILE_EXTENSIONS.test(href)) {
+            found.push(href);
+          }
+        });
+        return found;
+      })();
 
   // Word count via htmlToText
   const plainText = htmlToText(html);
@@ -74,12 +85,12 @@ export function extractMetadata(html: string, url: string): PageMetadata {
     language,
     canonical,
     noindex,
-    httpStatus: 200,
+    httpStatus,
     dateModified,
     imageCount,
     wordCount,
     urlDepth,
-    linkedFiles,
+    linkedFiles: finalLinkedFiles,
   };
 }
 

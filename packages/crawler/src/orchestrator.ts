@@ -19,11 +19,11 @@ import { sanitizeHtml } from './sanitizer.js';
 import { htmlToText } from './html-to-text.js';
 import {
   sanitizeText,
-  extractMetadata,
   readInventory,
   upsertRow,
   urlToTxtPath,
 } from '@fci/shared';
+import { buildPageMetadata } from './metadata.js';
 import type { CrawlConfig, InventoryRow } from '@fci/shared';
 
 // ---------------------------------------------------------------------------
@@ -65,7 +65,26 @@ function extractLinks(html: string, baseUrl: string): string[] {
   return links;
 }
 
-/** Decide whether a URL should be crawled given the config filters. */
+/** Extract non-HTML linked files (PDF, DOCX, XLSX, ZIP) from sanitized HTML. */
+function extractLinkedFiles(html: string, baseUrl: string): string {
+  const LINKED_FILE_EXTENSIONS = /\.(pdf|docx?|xlsx?|zip)(\/|\?.*)?$/i;
+  const $ = cheerio.load(html);
+  const files: string[] = [];
+  $('a[href]').each((_, el) => {
+    const href = $(el).attr('href')?.trim() ?? '';
+    if (!href) return;
+    try {
+      const resolved = new URL(href, baseUrl);
+      if (LINKED_FILE_EXTENSIONS.test(resolved.pathname)) {
+        files.push(resolved.toString());
+      }
+    } catch {
+      // Malformed href — skip
+    }
+  });
+  return files.join('|');
+}
+
 function shouldCrawl(url: string, config: CrawlConfig): boolean {
   try {
     const parsed = new URL(url);
@@ -183,15 +202,19 @@ export async function crawl(config: CrawlConfig): Promise<void> {
       // Step 5: Filter prompt injections
       const cleanText = sanitizeText(rawText);
 
-      // Step 6: Extract metadata
-      const metadata = extractMetadata(rawHtml, url);
+      // Step 6: Extract linked non-HTML files (PDF, DOCX, XLSX, ZIP) and build full metadata
+      const linkedFileArray = extractLinkedFiles(cleanHtml, url).split('|').filter(Boolean);
+      const metadata = buildPageMetadata(rawHtml, cleanText, linkedFileArray, {
+        url,
+        httpStatus: downloadResult.httpStatus,
+      });
 
-      // Step 7: Determine output path and write .txt file
+      // Step 8: Determine output path and write .txt file
       const txtPath = urlToTxtPath(url, config.outputDir);
       await fs.mkdir(path.dirname(txtPath), { recursive: true });
       await fs.writeFile(txtPath, cleanText, 'utf8');
 
-      // Step 8: Upsert inventory row with crawl_status='done'
+      // Step 9: Upsert inventory row with crawl_status='done'
       const row: InventoryRow = {
         url,
         local_path: txtPath,
@@ -200,6 +223,14 @@ export async function crawl(config: CrawlConfig): Promise<void> {
         ai_status: 'pending',
         title: metadata.title,
         word_count: metadata.wordCount,
+        description: metadata.description,
+        http_status: metadata.httpStatus,
+        language: metadata.language,
+        date_modified: metadata.dateModified,
+        canonical: metadata.canonical,
+        noindex: metadata.noindex,
+        image_count: metadata.imageCount,
+        linked_files: metadata.linkedFiles.join('|'),
       };
       await upsertRow(csvPath, row);
 

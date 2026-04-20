@@ -91,6 +91,15 @@ export interface InventoryRow {
   word_count?: number;
   page_type?: string;
   summary?: string;
+  // Metadata fields populated by the crawler
+  description?: string;
+  http_status?: number;
+  language?: string;
+  date_modified?: string;
+  canonical?: string;
+  noindex?: boolean;
+  image_count?: number;
+  linked_files?: string;
 }
 
 /** Configuration for the crawl stage */

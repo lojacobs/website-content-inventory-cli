@@ -9,9 +9,11 @@ import * as cheerio from 'cheerio';
 import type { PageMetadata } from '@fci/shared';
 
 export interface MetadataExtractionOptions {
-  url: string;
+  url?: string;
   httpStatus?: number;
+  linkedFiles?: string[];
 }
+
 
 /**
  * Extract metadata from raw HTML content.
@@ -19,8 +21,8 @@ export interface MetadataExtractionOptions {
 export function extractMetadata(
   html: string,
   options: MetadataExtractionOptions
-): Omit<PageMetadata, 'wordCount' | 'linkedFiles'> {
-  const { url, httpStatus = 200 } = options;
+): Omit<PageMetadata, 'wordCount'> {
+  const { url: pageUrl = '', httpStatus = 200 } = options;
   const $ = cheerio.load(html);
 
   // Title: prefer <title> tag, fallback to first h1
@@ -47,7 +49,7 @@ export function extractMetadata(
   const canonical =
     $('link[rel="canonical"]').attr('href')?.trim() ||
     $('meta[property="og:url"]').attr('content')?.trim() ||
-    url;
+    pageUrl;
 
   // Noindex directive
   const robotsMeta = $('meta[name="robots"]').attr('content')?.toLowerCase() || '';
@@ -63,12 +65,12 @@ export function extractMetadata(
 
   // Image count in original HTML
   const imageCount = $('img').length;
-
+  const linkedFiles = options.linkedFiles ?? [];
   // URL depth
-  const urlDepth = getUrlDepth(url);
+  const urlDepth = getUrlDepth(pageUrl);
 
   return {
-    url,
+    url: pageUrl,
     title,
     description,
     language,
@@ -78,6 +80,7 @@ export function extractMetadata(
     dateModified,
     imageCount,
     urlDepth,
+    linkedFiles,
   };
 }
 
@@ -91,7 +94,7 @@ export function buildPageMetadata(
   linkedFiles: string[],
   options: MetadataExtractionOptions
 ): PageMetadata {
-  const base = extractMetadata(html, options);
+  const base = extractMetadata(html, { ...options, url: options.url ?? '' });
   const wordCount = countWords(plainText);
 
   return {

@@ -16,6 +16,14 @@ const COLUMNS: (keyof InventoryRow)[] = [
   'word_count',
   'page_type',
   'summary',
+  'description',
+  'http_status',
+  'language',
+  'date_modified',
+  'canonical',
+  'noindex',
+  'image_count',
+  'linked_files',
 ];
 
 // ---------------------------------------------------------------------------
@@ -23,7 +31,7 @@ const COLUMNS: (keyof InventoryRow)[] = [
 // ---------------------------------------------------------------------------
 
 /** Escape a single CSV field value. */
-function escapeField(value: string | number | undefined): string {
+function escapeField(value: string | number | boolean | undefined): string {
   if (value === undefined || value === null) return '';
   const str = String(value);
   // Wrap in double-quotes if the value contains comma, double-quote, or newline
@@ -89,6 +97,10 @@ function fieldsToRow(fields: string[]): InventoryRow {
   };
 
   const wordCountRaw = opt(COLUMNS.indexOf('word_count'));
+  const httpStatusRaw = opt(COLUMNS.indexOf('http_status'));
+  const imageCountRaw = opt(COLUMNS.indexOf('image_count'));
+  const noindexRaw = opt(COLUMNS.indexOf('noindex'));
+
 
   return {
     url: get(COLUMNS.indexOf('url')),
@@ -102,6 +114,14 @@ function fieldsToRow(fields: string[]): InventoryRow {
     word_count: wordCountRaw !== undefined ? Number(wordCountRaw) : undefined,
     page_type: opt(COLUMNS.indexOf('page_type')),
     summary: opt(COLUMNS.indexOf('summary')),
+    description: opt(COLUMNS.indexOf('description')),
+    http_status: httpStatusRaw !== undefined ? Number(httpStatusRaw) : undefined,
+    language: opt(COLUMNS.indexOf('language')),
+    date_modified: opt(COLUMNS.indexOf('date_modified')),
+    canonical: opt(COLUMNS.indexOf('canonical')),
+    noindex: noindexRaw !== undefined ? noindexRaw === 'true' : undefined,
+    image_count: imageCountRaw !== undefined ? Number(imageCountRaw) : undefined,
+    linked_files: opt(COLUMNS.indexOf('linked_files')),
   };
 }
 
