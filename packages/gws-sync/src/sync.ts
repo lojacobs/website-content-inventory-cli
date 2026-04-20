@@ -6,6 +6,7 @@ import { mirrorFolderTree } from "./folder-mirror.js";
 import { uploadAsDoc, updateDoc } from "./doc-upload.js";
 import { replaceImagesInDoc } from "./image-replacement.js";
 import { uploadAsSheet, updateSheet } from "./sheet-upload.js";
+import { transformInventoryToPublicCSV } from "./schema-transform.js";
 
 // ---------------------------------------------------------------------------
 // CSV helpers (no external deps — plain text split)
@@ -100,6 +101,10 @@ export async function sync(config: SyncConfig): Promise<void> {
   // Initialize rootSubfolderId to the raw root, will be updated if folders are mirrored
   let rootSubfolderId = driveRootFolderId;
 
+  // Compute relative Drive paths from URLs and local paths (needed for both doc sync and sheet creation)
+  const localToRelativePaths = new Map<string, string>();
+  let folderMap = new Map<string, string>();
+
   if (unsynced.length === 0) {
     console.log("All rows already synced. Nothing to do.");
   } else {
@@ -113,8 +118,6 @@ export async function sync(config: SyncConfig): Promise<void> {
       .filter((r) => r.local_path)
       .map((r) => path.dirname(r.local_path));
 
-    // Compute relative Drive paths from URLs and local paths
-    const localToRelativePaths = new Map<string, string>();
     for (const row of rows) {
       if (!row.local_path || !row.url) continue;
 
@@ -164,7 +167,7 @@ export async function sync(config: SyncConfig): Promise<void> {
       (p) => localToRelativePaths.get(p) ?? p
     );
 
-    const folderMap = await mirrorFolderTree(relativePaths, driveRootFolderId);
+    folderMap = await mirrorFolderTree(relativePaths, driveRootFolderId);
 
     // Extract the root {client}_{project} subfolder ID from the folderMap
     // The first entry in folderMap is the root subfolder created during mirroring
@@ -242,17 +245,40 @@ export async function sync(config: SyncConfig): Promise<void> {
   console.log("Uploading inventory sheet...");
   const inventorySheetName = "_inventory";
 
+  // Transform internal rows to public schema
+  const driveFolderLinkMap = new Map<string, string>();
+  for (const row of rows) {
+    if (row.local_path && localToRelativePaths.size > 0) {
+      const dir = path.dirname(row.local_path);
+      const relativeDir = localToRelativePaths.get(dir);
+      const driveFolderId = relativeDir ? folderMap.get(relativeDir) : undefined;
+      if (driveFolderId) {
+        driveFolderLinkMap.set(
+          row.url,
+          `https://drive.google.com/drive/folders/${driveFolderId}`
+        );
+      }
+    }
+  }
+
+  const publicCSV = transformInventoryToPublicCSV(rows, driveFolderLinkMap);
+  const publicSheetPath = path.join(
+    path.dirname(inventoryPath),
+    "_inventory_public.csv"
+  );
+  fs.writeFileSync(publicSheetPath, publicCSV, "utf8");
+
   // Check if any row already has a sheet_id (written by a prior run)
   const existingSheetId = rows.find((r) => r.sheet_id)?.sheet_id;
 
   if (existingSheetId) {
-    await updateSheet(existingSheetId, inventoryPath);
+    await updateSheet(existingSheetId, publicSheetPath);
     console.log(
       `  Updated sheet: https://docs.google.com/spreadsheets/d/${existingSheetId}/edit`
     );
   } else {
     const sheetUrl = await uploadAsSheet(
-      inventoryPath,
+      publicSheetPath,
       inventorySheetName,
       rootSubfolderId
     );
@@ -263,6 +289,13 @@ export async function sync(config: SyncConfig): Promise<void> {
     });
     writeCSV(inventoryPath, rows);
     console.log(`  Created sheet: ${sheetUrl}`);
+  }
+
+  // Clean up temporary public schema CSV
+  try {
+    fs.unlinkSync(publicSheetPath);
+  } catch {
+    // Ignore errors if file doesn't exist
   }
 
   console.log("Sync complete.");
