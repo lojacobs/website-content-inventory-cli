@@ -104,7 +104,7 @@ function serializeInventoryCsv(rows: InventoryRow[]): string {
 }
 
 /** Process a single row: classify + summarize in parallel, mutate in place. */
-async function processRow(row: InventoryRow): Promise<void> {
+async function processRow(row: InventoryRow, provider?: string, model?: string): Promise<void> {
   const textPath = row.local_path.replace(/\.html?$/i, '.txt');
 
   let text: string;
@@ -119,8 +119,8 @@ async function processRow(row: InventoryRow): Promise<void> {
     }
   }
 
-  const classify = buildRunPrompt(PAGE_TYPE_SYSTEM_PROMPT);
-  const summarize = buildRunPrompt(SUMMARY_SYSTEM_PROMPT);
+  const classify = buildRunPrompt(PAGE_TYPE_SYSTEM_PROMPT, provider, model);
+  const summarize = buildRunPrompt(SUMMARY_SYSTEM_PROMPT, provider, model);
 
   const [pageType, summary] = await Promise.all([
     classify(buildPageTypeUserContent(text)),
@@ -160,7 +160,7 @@ async function runWithConcurrency<T>(
  * and writes results back after each batch.
  */
 export async function summarize(config: SummarizeConfig): Promise<void> {
-  const { inventoryPath, maxConcurrency = 3 } = config;
+  const { inventoryPath, provider, model, maxConcurrency = 3 } = config;
   const csvPath = path.resolve(inventoryPath);
 
   const rows = await readInventoryCsv(csvPath);
@@ -186,7 +186,7 @@ export async function summarize(config: SummarizeConfig): Promise<void> {
   for (const batch of batches) {
     const tasks = batch.map(row => async () => {
       try {
-        await processRow(row);
+        await processRow(row, provider, model);
         console.log(`  [done] ${row.url}`);
       } catch (err) {
         row.ai_status = 'error';

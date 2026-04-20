@@ -92,6 +92,9 @@ export function sanitizeHtml(rawHtml: string, options: SanitizeOptions = {}): st
   // 2. Remove elements whose class or id matches UI chrome patterns
   $('*').each((_i, el) => {
     if (el.type !== 'tag') return;
+    // Never remove structural root elements regardless of their class names
+    const tag = (el as any).tagName?.toLowerCase();
+    if (tag === 'body' || tag === 'html') return;
 
     const classAttr = $(el).attr('class') || '';
     const idAttr = $(el).attr('id') || '';

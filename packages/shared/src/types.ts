@@ -114,6 +114,7 @@ export interface SyncConfig {
 /** Configuration for the AI summarization stage */
 export interface SummarizeConfig {
   inventoryPath: string;
+  provider?: string;
   model?: string;
   maxConcurrency?: number;
 }

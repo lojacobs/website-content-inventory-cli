@@ -51,8 +51,10 @@ export async function updateSheet(
   sheetId: string,
   csvPath: string
 ): Promise<void> {
+  const params = JSON.stringify({ fileId: sheetId });
   const cmd = [
-    `gws drive files update ${sheetId}`,
+    `gws drive files update`,
+    `--params '${params}'`,
     `--upload ${csvPath}`,
     `--upload-content-type text/csv`,
   ].join(" \\\n  ");

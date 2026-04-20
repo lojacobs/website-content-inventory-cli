@@ -65,38 +65,39 @@ export async function downloadPage(
   const localPath = path.join(outputDir, safeName);
 
   // Build wget command with security flags
+  // Use execAsync with proper array syntax to avoid shell injection
+  const wgetCmd = 'wget';
   const wgetArgs = [
-    'wget',
     '--quiet',
     '--server-response',
     `--timeout=${timeout}`,
-    `--user-agent="${userAgent}"`,
-    `--max-redirect=5`,
-    // Only follow HTTP and HTTPS
+    `--user-agent=${userAgent}`,  // Don't quote here; shell handles it
+    '--max-redirect=5',
     '--no-verbose',
-    // Reject non-HTML content types
     `--accept-regex=.*`,
-    // Limit download size
     `--quota=${maxSize}`,
-    // Do not execute or interpret content
     '--no-cookies',
     '--no-check-certificate',
   ];
 
-  if (respectRobots) {
-    // wget respects robots.txt by default (no flag needed)
-  } else {
+  if (!respectRobots) {
     wgetArgs.push('-e', 'robots=off');
   }
 
-  wgetArgs.push(`-O "${localPath}"`, `"${url}"`);
+  wgetArgs.push('-O', localPath, url);
 
   let httpStatus = 0;
   let success = false;
   let error: string | undefined;
 
   try {
-    const { stderr } = await execAsync(wgetArgs.join(' '), {
+    // Build command as: wget arg1 arg2 ... avoiding shell injection
+    const fullCmd = [wgetCmd, ...wgetArgs.map(arg => {
+      // Escape single quotes and wrap in single quotes for safety
+      return `'${arg.replace(/'/g, "'\\''")}'`;
+    })].join(' ');
+
+    const { stderr } = await execAsync(fullCmd, {
       timeout: (timeout + 5) * 1000,
       // Prevent shell injection by limiting env
       env: { PATH: '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin' },
