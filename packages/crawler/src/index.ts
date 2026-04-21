@@ -20,3 +20,18 @@ export {
 export {
   htmlToText,
 } from "./convert.js";
+
+export {
+  sanitizeHtml,
+} from "./sanitize.js";
+
+export {
+  sanitizeText,
+  loadInjectionPatterns,
+} from "./injection.js";
+
+export {
+  crawl,
+  processPage,
+  type CrawlOptions,
+} from "./crawl.js";
