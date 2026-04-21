@@ -5,6 +5,9 @@
   "description": "Web crawler with content extraction, sanitization, and injection detection",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "bin": {
+    "fci-crawl": "./dist/cli.js"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -18,6 +21,7 @@
   "dependencies": {
     "@full-content-inventory/shared": "workspace:*",
     "cheerio": "^1.2.0",
+    "commander": "^14.0.3",
     "unidecode": "^1.1.0"
   },
   "devDependencies": {
