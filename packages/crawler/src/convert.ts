@@ -21,41 +21,35 @@ import * as cheerio from "cheerio";
 export function htmlToText(html: string): string {
   const $ = cheerio.load(html);
   
-  // Process body or root element
-  const body = $("body").length > 0 ? $("body") : $.root();
+  // Process the document from body
   let result = "";
   
-  body.contents().each((_, node) => {
-    if (node.type === "tag" || node.type === "text") {
-      result += processNode(node as cheerio.Node, $);
-    }
+  $("body").contents().each((_: number, elem: any) => {
+    result += processNode(elem, $);
   });
   
-  // Fallback: if body parsing gave nothing, process entire document
+  // Fallback: if body gave nothing, try all elements
   if (!result.trim()) {
-    $("*").each((_, elem) => {
-      result += processNode(elem as cheerio.Node, $);
+    $("*").each((_: number, elem: any) => {
+      result += processNode(elem, $);
     });
   }
   
   return normalizeWhitespace(result.trim());
 }
 
-type Node = ReturnType<cheerio.CheerioAPI["root"]> extends cheerio.Cheerio<infer T> ? T : never;
-
 /**
- * Recursively process a cheerio node and its children.
+ * Process a DOM node and return its text representation.
  */
-function processNode(node: cheerio.Node, $: cheerio.CheerioAPI): string {
-  if (node.type === "text") {
-    return (node as cheerio.TextNode).data || "";
+function processNode(elem: any, $: any): string {
+  if (elem.type === "text") {
+    return elem.data || "";
   }
   
-  if (node.type !== "tag") {
+  if (elem.type !== "tag") {
     return "";
   }
   
-  const elem = node as cheerio.Element;
   const tagName = (elem.tagName || "").toLowerCase();
   const $elem = $(elem);
   
@@ -87,7 +81,7 @@ function processNode(node: cheerio.Node, $: cheerio.CheerioAPI): string {
     case "ul":
     case "ol": {
       let listText = "\n";
-      $elem.children("li").each((_, li) => {
+      $elem.children("li").each((_: number, li: any) => {
         const liText = $(li).text().trim();
         if (liText) {
           listText += `- ${liText}\n`;
@@ -108,8 +102,8 @@ function processNode(node: cheerio.Node, $: cheerio.CheerioAPI): string {
     case "article":
     case "blockquote": {
       let content = "";
-      $elem.contents().each((_, child) => {
-        content += processNode(child as cheerio.Node, $);
+      $elem.contents().each((_: number, child: any) => {
+        content += processNode(child, $);
       });
       return content + "\n";
     }
@@ -129,8 +123,8 @@ function processNode(node: cheerio.Node, $: cheerio.CheerioAPI): string {
     case "code":
     case "pre": {
       let content = "";
-      $elem.contents().each((_, child) => {
-        content += processNode(child as cheerio.Node, $);
+      $elem.contents().each((_: number, child: any) => {
+        content += processNode(child, $);
       });
       return content;
     }
@@ -143,8 +137,8 @@ function processNode(node: cheerio.Node, $: cheerio.CheerioAPI): string {
     // Default: process children
     default: {
       let content = "";
-      $elem.contents().each((_, child) => {
-        content += processNode(child as cheerio.Node, $);
+      $elem.contents().each((_: number, child: any) => {
+        content += processNode(child, $);
       });
       return content;
     }
@@ -154,22 +148,22 @@ function processNode(node: cheerio.Node, $: cheerio.CheerioAPI): string {
 /**
  * Process a table element and return pipe-delimited markdown.
  */
-function processTable($table: cheerio.Cheerio, $: cheerio.CheerioAPI): string {
+function processTable($table: any, $: ReturnType<typeof cheerio.load>): string {
   const rows: string[][] = [];
   
   // Extract header row
-  $table.find("thead tr").each((_, tr) => {
+  $table.find("thead tr").each((_: number, tr: any) => {
     const row: string[] = [];
-    $(tr).find("th, td").each((_, cell) => {
+    $(tr).find("th, td").each((__: number, cell: any) => {
       row.push($(cell).text().trim());
     });
     if (row.length > 0) rows.push(row);
   });
   
   // Extract body rows
-  $table.find("tbody tr").each((_, tr) => {
+  $table.find("tbody tr").each((_: number, tr: any) => {
     const row: string[] = [];
-    $(tr).find("td").each((_, cell) => {
+    $(tr).find("td").each((__: number, cell: any) => {
       row.push($(cell).text().trim());
     });
     if (row.length > 0) rows.push(row);
@@ -177,9 +171,9 @@ function processTable($table: cheerio.Cheerio, $: cheerio.CheerioAPI): string {
   
   // Fallback: extract all rows if tbody/thead not found
   if (rows.length === 0) {
-    $table.find("tr").each((_, tr) => {
+    $table.find("tr").each((_: number, tr: any) => {
       const row: string[] = [];
-      $(tr).find("th, td").each((_, cell) => {
+      $(tr).find("th, td").each((__: number, cell: any) => {
         row.push($(cell).text().trim());
       });
       if (row.length > 0) rows.push(row);
