@@ -22,7 +22,7 @@ create-beads.sh
 create-beads.log
 
 # ─── Build artifacts ──────────────────────────────────────────────────────────
-packages/*/dist/
+src/packages/*/dist/
 **/node_modules/
 coverage/
 *.tsbuildinfo
@@ -35,3 +35,6 @@ coverage/
 # ─── OS ───────────────────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
+
+# bv (beads viewer) local config and caches
+.bv/

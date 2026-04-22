@@ -1,0 +1,91 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "task-schema.json",
+  "title": "Task",
+  "description": "Schema for a single Beads task in the Single Spine agentic system.",
+  "type": "object",
+  "required": [
+    "id",
+    "type",
+    "title",
+    "inputs",
+    "outputs",
+    "files",
+    "dependencies",
+    "acceptance_criteria",
+    "test_plan"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^task-[0-9]{3,}$",
+      "description": "Unique task identifier. Format: task-NNN (e.g. task-001)."
+    },
+    "type": {
+      "type": "string",
+      "enum": ["feature", "bug", "refactor"],
+      "description": "Task classification."
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80,
+      "description": "Short human-readable description. Max 80 characters."
+    },
+    "inputs": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Artifacts, data, or conditions required before this task can start."
+    },
+    "outputs": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Artifacts or state changes produced by this task."
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[^/].*",
+        "description": "Repo-relative path (no leading slash)."
+      },
+      "minItems": 1,
+      "description": "Source files this task reads or modifies."
+    },
+    "dependencies": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^task-[0-9]{3,}$"
+      },
+      "description": "IDs of tasks that must be completed before this one can start. Empty array = no dependencies."
+    },
+    "acceptance_criteria": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "minItems": 1,
+      "description": "Observable, testable outcomes that define done. Each item is a single criterion."
+    },
+    "test_plan": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "minItems": 1,
+      "description": "Commands or test file paths the Orchestrator runs to verify the task. Must be executable as-is."
+    },
+    "module": {
+      "type": "string",
+      "description": "Optional. Name of the module this task belongs to (matches modules/{module-name}/)."
+    },
+    "priority": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 5,
+      "description": "Optional. 1 = highest, 5 = lowest. Used by beads_viewer triage."
+    },
+    "notes": {
+      "type": "string",
+      "description": "Optional. Free-form context for the Worker. Not evaluated by validator."
+    }
+  }
+}
