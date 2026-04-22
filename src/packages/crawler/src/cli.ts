@@ -29,6 +29,8 @@ const { values, positionals } = parseArgs({
     "no-resume": { type: "boolean", default: false },
     config: { type: "string" },
     "max-depth": { type: "string" },
+    mode: { type: "string" },
+    delay: { type: "string" },
     help: { type: "boolean", short: "h" },
   },
   allowPositionals: false,
@@ -50,6 +52,8 @@ Options:
   --no-resume              Disable resume mode (re-crawl already processed URLs)
   --config <path>          Injection patterns config file path
   --max-depth <n>          Maximum crawl depth (default: 0)
+  --mode <mode>            Crawl mode: domain | folder | page | list (default: page)
+  --delay <ms>             Milliseconds between page fetches (default: 500)
   -h, --help               Show this help message
 
 Either --url or --urls-file must be provided (not both, not neither).
@@ -116,11 +120,39 @@ if (hasUrl) {
 const outputDir = flags.output as string;
 const inventoryPath = join(outputDir, `${client}_${project}_inventory.csv`);
 
+// ---------------------------------------------------------------------------
+// Validate mode & delay
+// ---------------------------------------------------------------------------
+
+const VALID_MODES = ["domain", "folder", "page", "list"] as const;
+const modeRaw = (flags.mode as string | undefined) ?? "page";
+if (!VALID_MODES.includes(modeRaw as typeof VALID_MODES[number])) {
+  // eslint-disable-next-line no-console
+  console.error(`Error: --mode must be one of ${VALID_MODES.join(", ")}. Got: ${modeRaw}`);
+  process.exit(1);
+}
+
+let delayNum = 500;
+if (flags.delay !== undefined) {
+  delayNum = Number(flags.delay);
+  if (!Number.isInteger(delayNum) || delayNum < 0) {
+    // eslint-disable-next-line no-console
+    console.error("Error: --delay must be a positive integer (milliseconds).");
+    process.exit(1);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Build CrawlOptions
+// ---------------------------------------------------------------------------
+
 const crawlOptions: CrawlOptions = {
   outputDir,
   inventoryPath,
   patterns: flags.config ? [flags.config as string] : undefined,
   resume: !flags["no-resume"],
+  mode: modeRaw as CrawlOptions["mode"],
+  delay: delayNum,
 };
 
 void positionals;

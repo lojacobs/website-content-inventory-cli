@@ -14,6 +14,7 @@ import { extractMeta, type PageMeta } from "./meta.js";
 import { sanitizeHtml } from "./sanitize.js";
 import { htmlToText } from "./convert.js";
 import { sanitizeText, loadInjectionPatterns } from "./injection.js";
+import { discoverDomainUrls } from "./discover.js";
 import {
   upsertRow,
   readInventory,
@@ -39,6 +40,10 @@ export interface CrawlOptions {
   userAgent?: string;
   /** Request timeout in seconds */
   timeout?: number;
+  /** Milliseconds to wait between page fetches (default: 500) */
+  delay?: number;
+  /** Crawl mode */
+  mode: "domain" | "folder" | "page" | "list";
 }
 
 // ---------------------------------------------------------------------------
@@ -170,7 +175,25 @@ export async function crawl(
     resume = true,
     userAgent,
     timeout,
+    delay = 500,
+    mode,
   } = options;
+
+  if (mode === "folder") {
+    console.error(`[crawl] mode not yet implemented: ${mode}`);
+    process.exit(1);
+  }
+
+  let urlsToCrawl = urls;
+  if (mode === "domain") {
+    if (urls.length === 0) {
+      console.error("[crawl] domain mode requires at least one seed URL");
+      process.exit(1);
+    }
+    const discovered = await discoverDomainUrls(urls[0], { userAgent, timeout });
+    urlsToCrawl = discovered;
+    console.log(`[crawl] domain mode: discovered ${discovered.length} URL(s)`);
+  }
 
   // Load the URL set once for O(1) resume checks
   const doneUrls = resume ? await loadDoneUrls(inventoryPath) : new Set<string>();
@@ -185,13 +208,19 @@ export async function crawl(
 
   let processed = 0;
   let skipped = 0;
+  let first = true;
 
-  for (const url of urls) {
+  for (const url of urlsToCrawl) {
     if (resume && doneUrls.has(url)) {
       console.log(`[crawl] ↷ skip (done)  ${url}`);
       skipped++;
       continue;
     }
+
+    if (!first && delay > 0) {
+      await sleep(delay);
+    }
+    first = false;
 
     try {
       await processPage(url, {
@@ -200,6 +229,8 @@ export async function crawl(
         patterns: activePatterns,
         userAgent,
         timeout,
+        delay,
+        mode,
       });
       processed++;
     } catch (err) {
@@ -216,6 +247,11 @@ export async function crawl(
 // ---------------------------------------------------------------------------
 
 /** Load the set of already-crawled URLs from the inventory CSV. */
+/** Pause execution for `ms` milliseconds. */
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function loadDoneUrls(inventoryPath: string): Promise<Set<string>> {
   try {
     const rows = await readInventory(inventoryPath);
