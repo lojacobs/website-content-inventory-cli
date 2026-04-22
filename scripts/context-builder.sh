@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # scripts/context-builder.sh
 # Prerequisite for Claude planning sessions.
-# Generates a minimal context slice from the codebase for a given task (or task batch).
+# Generates a context slice (map + scope) from the codebase for a given task or task batch.
 #
 # Usage:
 #   context-builder.sh --task <task-file.json> [--module <module-name>] [--repo <repo-root>]
@@ -10,7 +10,7 @@
 # Output:
 #   modules/{module-name}/context-slice.json   (gitignored)
 #
-# Dependencies: jq, repomix (with --tree-sitter support)
+# Dependencies: jq, repomix
 # Prefer bun/bash; no Node required.
 
 set -euo pipefail
@@ -51,6 +51,8 @@ done
 
 # ── resolve paths ─────────────────────────────────────────────────────────────
 ARCH_GENERAL="${REPO_ROOT}/general/ARCHITECTURE.md"
+MAP_SCHEMA="${REPO_ROOT}/config/repomix-map-schema.json"
+SCOPE_SCHEMA="${REPO_ROOT}/config/repomix-scope-schema.json"
 
 if [[ -n "$BATCH_FILE" ]]; then
   INPUT_FILE="$BATCH_FILE"
@@ -91,25 +93,48 @@ else
   TASK_IDS=$(jq -r '.id // "unknown"' "$INPUT_FILE" 2>/dev/null || echo "unknown")
 fi
 
-# ── build repomix include list ─────────────────────────────────────────────────
-REPOMIX_TMP="$(mktemp /tmp/repomix-out-XXXXXX.txt)"
-trap 'rm -f "$REPOMIX_TMP"' EXIT
+# ── temp file setup ───────────────────────────────────────────────────────────
+MAP_TMP="$(mktemp /tmp/repomix-map-XXXXXX.txt)"
+SCOPE_TMP="$(mktemp /tmp/repomix-scope-XXXXXX.txt)"
+SCOPE_CFG_TMP="$(mktemp /tmp/repomix-scope-cfg-XXXXXX.json)"
+MAP_CFG_TMP="$(mktemp /tmp/repomix-map-cfg-XXXXXX.json)"
+trap 'rm -f "$MAP_TMP" "$SCOPE_TMP" "$SCOPE_CFG_TMP" "$MAP_CFG_TMP"' EXIT
 
-INCLUDE_PATHS=()
-while IFS= read -r f; do
-  [[ -n "$f" ]] && INCLUDE_PATHS+=("${REPO_ROOT}/${f}")
-done <<< "$RELEVANT_FILES"
-
-if [[ ${#INCLUDE_PATHS[@]} -eq 0 ]]; then
-  echo "[${SCRIPT_NAME}] WARN: no files listed in task(s); running repomix on full repo." >&2
-  repomix --tree-sitter --output "$REPOMIX_TMP" "$REPO_ROOT" 2>/dev/null || true
+# ── map generation (compressed global view) ───────────────────────────────────
+CODE_MAP=""
+if [[ -f "$MAP_SCHEMA" ]]; then
+  jq --arg out "$MAP_TMP" '.output.filePath = $out' "$MAP_SCHEMA" > "$MAP_CFG_TMP"
+  repomix --config "$MAP_CFG_TMP" --compress 2>/dev/null || true
+  [[ -f "$MAP_TMP" ]] && CODE_MAP=$(cat "$MAP_TMP")
 else
-  repomix --tree-sitter --output "$REPOMIX_TMP" "${INCLUDE_PATHS[@]}" 2>/dev/null || true
+  echo "[${SCRIPT_NAME}] WARN: map schema not found at ${MAP_SCHEMA}; skipping map generation." >&2
 fi
 
-RAW_SKELETON=""
-if [[ -f "$REPOMIX_TMP" ]]; then
-  RAW_SKELETON=$(cat "$REPOMIX_TMP")
+# ── scope generation (dynamic, task-module-specific) ─────────────────────────
+CODE_SCOPE=""
+if [[ -f "$SCOPE_SCHEMA" ]]; then
+  # Base includes: src/ and general/ are always in scope
+  DYNAMIC_INCLUDES='["src/**","general/**"]'
+
+  # Add the task's module directory
+  if [[ -n "$MODULE_NAME" && "$MODULE_NAME" != "unknown" ]]; then
+    DYNAMIC_INCLUDES=$(echo "$DYNAMIC_INCLUDES" | jq --arg m "modules/${MODULE_NAME}/**" '. + [$m]')
+  fi
+
+  # Add any explicit file paths from the task
+  while IFS= read -r f; do
+    [[ -n "$f" ]] && DYNAMIC_INCLUDES=$(echo "$DYNAMIC_INCLUDES" | jq --arg f "$f" '. + [$f]')
+  done <<< "$RELEVANT_FILES"
+
+  jq --arg out "$SCOPE_TMP" \
+     --argjson inc "$DYNAMIC_INCLUDES" \
+     '.output.filePath = $out | .include = $inc' \
+     "$SCOPE_SCHEMA" > "$SCOPE_CFG_TMP"
+
+  repomix --config "$SCOPE_CFG_TMP" 2>/dev/null || true
+  [[ -f "$SCOPE_TMP" ]] && CODE_SCOPE=$(cat "$SCOPE_TMP")
+else
+  echo "[${SCRIPT_NAME}] WARN: scope schema not found at ${SCOPE_SCHEMA}; skipping scope generation." >&2
 fi
 
 # ── load architecture summaries ───────────────────────────────────────────────
@@ -128,8 +153,6 @@ else
 fi
 
 # ── build output JSON ─────────────────────────────────────────────────────────
-# jq handles all JSON escaping; bash variables are passed via --arg / --argjson.
-
 RELEVANT_FILES_ARR=$(echo "$RELEVANT_FILES" | jq -R . | jq -s .)
 KEY_FUNCTIONS_ARR=$(echo "$KEY_FUNCTIONS"   | jq -R . | jq -s .)
 
@@ -138,7 +161,8 @@ jq -n \
   --arg module           "$MODULE_NAME" \
   --argjson relevant_files "$RELEVANT_FILES_ARR" \
   --argjson key_functions  "$KEY_FUNCTIONS_ARR" \
-  --arg skeleton         "$RAW_SKELETON" \
+  --arg code_map         "$CODE_MAP" \
+  --arg code_scope       "$CODE_SCOPE" \
   --arg arch_general     "$ARCH_GENERAL_CONTENT" \
   --arg arch_module      "$ARCH_MODULE_CONTENT" \
   --arg generated_at     "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
@@ -148,7 +172,8 @@ jq -n \
     module:                $module,
     relevant_files:        $relevant_files,
     key_functions:         $key_functions,
-    code_skeleton:         $skeleton,
+    code_map:              $code_map,
+    code_scope:            $code_scope,
     architecture_summary: {
       general: $arch_general,
       module:  $arch_module

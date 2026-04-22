@@ -1,0 +1,26 @@
+{
+  "output": {
+    "filePath": "repomix-map.txt",
+    "style": "markdown",
+    "removeComments": true,
+    "removeEmptyLines": true
+  },
+  "include": [
+    "src/**/*", 
+    "modules/**/*.md", 
+    "general/*.md",
+    "config/repomix-instruction.md"
+  ],
+  "ignore": { 
+    "customPatterns": [
+      "**/*.test.ts", 
+      "scripts/**",
+      "AGENTS.md",
+      "CLAUDE.md",
+      "repomix.map.*",
+      "repomix.scope.*"
+    ],
+    "useGitignore": true 
+  },
+  "tokenCountEncoding": "cl100k_base"
+}

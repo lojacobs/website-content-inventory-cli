@@ -1,0 +1,32 @@
+{
+  "output": {
+    "filePath": "repomix-scope.txt",
+    "style": "markdown",
+    "removeComments": false,
+    "removeEmptyLines": true
+  },
+  "include": [
+    "src/**",
+    "general/**",
+    "modules/bootstrap-and-crawler/**",
+    "config/repomix-instruction.md"
+  ],
+  "ignore": { 
+    "useGitignore": true,
+    "customPatterns":[
+        "**/node_modules/**",
+        "**/dist/**",
+        "**/build/**",
+        "**/*.log",
+        "**/*.test.{js,ts,tsx}",
+        "**/tests/**",
+        "**/scripts/internal/**",
+        "package-lock.json",
+        "yarn.lock",
+        ".env*",
+        "*.svg",
+        "*.png",
+        "*.jpg"
+    ]
+ }
+}

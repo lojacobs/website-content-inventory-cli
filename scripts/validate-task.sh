@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # scripts/validate-task.sh
-# Validates a single task object against schemas/task-schema.json.
+# Validates a single task object against config/task-schema.json.
 # Used by Claude (pre-add) and the Orchestrator (pre-assign).
 #
 # Usage:
@@ -14,7 +14,7 @@
 
 set -euo pipefail
 
-SCHEMA_PATH="$(dirname "$0")/../schemas/task-schema.json"
+SCHEMA_PATH="$(dirname "$0")/../config/task-schema.json"
 SCRIPT_NAME="$(basename "$0")"
 
 # ── dependency check ──────────────────────────────────────────────────────────
