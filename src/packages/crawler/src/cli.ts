@@ -11,7 +11,7 @@
 
 import { parseArgs } from "node:util";
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+
 import { crawl } from "./crawl.js";
 import type { CrawlOptions } from "./crawl.js";
 
@@ -118,7 +118,6 @@ if (hasUrl) {
 // ---------------------------------------------------------------------------
 
 const outputDir = flags.output as string;
-const inventoryPath = join(outputDir, `${client}_${project}_inventory.csv`);
 
 // ---------------------------------------------------------------------------
 // Validate mode & delay
@@ -148,7 +147,8 @@ if (flags.delay !== undefined) {
 
 const crawlOptions: CrawlOptions = {
   outputDir,
-  inventoryPath,
+  client,
+  project,
   patterns: flags.config ? [flags.config as string] : undefined,
   resume: !flags["no-resume"],
   mode: modeRaw as CrawlOptions["mode"],

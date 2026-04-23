@@ -46,6 +46,8 @@ export interface CrawlResult {
 export interface InventoryRow {
   /** Full URL of the page */
   URL: string;
+  /** Final URL after redirects */
+  URL_finale?: string;
   /** Page title */
   Titre: string;
   /** Meta description */
@@ -72,10 +74,10 @@ export interface InventoryRow {
   Nb_images: number;
   /** Number of linked files (PDF, DOC, etc.) */
   Fichiers_liés: number;
-  /** Whether contains Google Doc links */
-  Lien_Google_Doc: boolean;
-  /** Whether contains Google Drive folder links */
-  Lien_dossier_Drive: boolean;
+  /** Google Doc link (filled by gws-sync) */
+  Lien_Google_Doc: string;
+  /** Google Drive folder link (filled by gws-sync) */
+  Lien_dossier_Drive: string;
 }
 
 /**
@@ -83,6 +85,7 @@ export interface InventoryRow {
  */
 export type InventoryColumn =
   | 'URL'
+  | 'URL_finale'
   | 'Titre'
   | 'Description'
   | 'Resume_200_chars'

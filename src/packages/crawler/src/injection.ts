@@ -7,14 +7,13 @@
  * Features:
  * - Loads injection patterns from a config file
  * - Removes invisible unicode characters (zero-width space, BOM, etc.)
- * - Normalizes homoglyphs (Cyrillic → Latin equivalents)
+ * - Normalizes homoglyphs (Cyrillic/Greek → Latin equivalents)
  * - Strips sentences/phrases matching known injection patterns
  */
 
 import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import unidecode from "unidecode";
 
 // __dirname polyfill for ESM
 const __filename = fileURLToPath(import.meta.url);
@@ -55,51 +54,92 @@ const INVISIBLE_CHARS: Array<[RegExp, string]> = [
   [/\u2029/g, " "],
   // Carriage return (dangling)
   [/\r/g, ""],
+  // Unicode Tags block U+E0000–U+E007F (LLM invisible-text injection vector)
+  [/[\u{E0000}-\u{E007F}]/gu, ""],
+  // Variation selector-1 (U+FE00) - combines with preceding character
+  [/\uFE00/gu, ""],
+  // Variation selector-2 (U+FE01) - combines with preceding character
+  [/\uFE01/gu, ""],
+  // Variation selector-3 through -15 (U+FE02–U+FE0F)
+  [/[\uFE02-\uFE0F]/gu, ""],
+  // Fullwidth Latin U+FF01–U+FF5E (ｅｖａｌ bypasses word-boundary regex)
+  [/[\uFF01-\uFF5E]/gu, ""],
+  // Mathematical alphanumerics U+1D400–U+1D7FF (𝐢𝐠𝐧𝐨𝐫𝐞 styled but not matched)
+  [/[\u{1D400}-\u{1D7FF}]/gu, ""],
 ];
 
-/** A simplified homoglyph map: common confusable Cyrillic → Latin.
- *  Full coverage is handled by unidecode; this map catches the most
- *  dangerous single-character replacements that unidecode maps ambiguously.
+/** A simplified homoglyph map: common confusable Cyrillic and Greek → Latin.
+ *  NFKC normalization handles fullwidth, mathematical, and compatibility forms.
+ *  This map catches visual lookalikes that need explicit mapping to their Latin equivalents.
  */
 const HOMOGLYPH_MAP: Array<[RegExp, string]> = [
   // Cyrillic 'а' (U+0430) → Latin 'a'
-  [/[\u0430]/g, "a"],
+  [/\u0430/g, "a"],
   // Cyrillic 'е' (U+0435) → Latin 'e'
-  [/[\u0435]/g, "e"],
+  [/\u0435/g, "e"],
   // Cyrillic 'о' (U+043E) → Latin 'o'
-  [/[\u043E]/g, "o"],
+  [/\u043E/g, "o"],
   // Cyrillic 'р' (U+0440) → Latin 'p'
-  [/[\u0440]/g, "p"],
+  [/\u0440/g, "p"],
   // Cyrillic 'с' (U+0441) → Latin 'c'
-  [/[\u0441]/g, "c"],
+  [/\u0441/g, "c"],
   // Cyrillic 'х' (U+0445) → Latin 'x'
-  [/[\u0445]/g, "x"],
+  [/\u0445/g, "x"],
   // Cyrillic 'у' (U+0443) → Latin 'y'
-  [/[\u0443]/g, "y"],
+  [/\u0443/g, "y"],
   // Cyrillic 'к' (U+043A) → Latin 'k'
-  [/[\u043A]/g, "k"],
+  [/\u043A/g, "k"],
   // Cyrillic 'М' (U+041C) → Latin 'M'
-  [/[\u041C]/g, "M"],
+  [/\u041C/g, "M"],
   // Cyrillic 'А' (U+0410) → Latin 'A'
-  [/[\u0410]/g, "A"],
+  [/\u0410/g, "A"],
   // Cyrillic 'В' (U+0412) → Latin 'B'
-  [/[\u0412]/g, "B"],
+  [/\u0412/g, "B"],
   // Cyrillic 'Е' (U+0415) → Latin 'E'
-  [/[\u0415]/g, "E"],
+  [/\u0415/g, "E"],
   // Cyrillic 'Н' (U+041D) → Latin 'H'
-  [/[\u041D]/g, "H"],
+  [/\u041D/g, "H"],
   // Cyrillic 'Р' (U+0420) → Latin 'P'
-  [/[\u0420]/g, "P"],
+  [/\u0420/g, "P"],
   // Cyrillic 'С' (U+0421) → Latin 'C'
-  [/[\u0421]/g, "C"],
+  [/\u0421/g, "C"],
   // Cyrillic 'Т' (U+0422) → Latin 'T'
-  [/[\u0422]/g, "T"],
+  [/\u0422/g, "T"],
   // Cyrillic 'Х' (U+0425) → Latin 'X'
-  [/[\u0425]/g, "X"],
+  [/\u0425/g, "X"],
   // Cyrillic 'У' (U+0423) → Latin 'Y'
-  [/[\u0423]/g, "Y"],
+  [/\u0423/g, "Y"],
   // Cyrillic 'К' (U+041A) → Latin 'K'
-  [/[\u041A]/g, "K"],
+  [/\u041A/g, "K"],
+  // Greek uppercase → Latin (14 visual lookalikes)
+  // Greek Α (U+0391) → Latin 'A'
+  [/\u0391/g, "A"],
+  // Greek Β (U+0392) → Latin 'B'
+  [/\u0392/g, "B"],
+  // Greek Ε (U+0395) → Latin 'E'
+  [/\u0395/g, "E"],
+  // Greek Η (U+0397) → Latin 'H'
+  [/\u0397/g, "H"],
+  // Greek Ι (U+0399) → Latin 'I'
+  [/\u0399/g, "I"],
+  // Greek Κ (U+039A) → Latin 'K'
+  [/\u039A/g, "K"],
+  // Greek Μ (U+039C) → Latin 'M'
+  [/\u039C/g, "M"],
+  // Greek Ν (U+039D) → Latin 'N'
+  [/\u039D/g, "N"],
+  // Greek Ο (U+039F) → Latin 'O'
+  [/\u039F/g, "O"],
+  // Greek Ρ (U+03A1) → Latin 'P'
+  [/\u03A1/g, "P"],
+  // Greek Τ (U+03A4) → Latin 'T'
+  [/\u03A4/g, "T"],
+  // Greek Υ (U+03A5) → Latin 'Y'
+  [/\u03A5/g, "Y"],
+  // Greek Χ (U+03A7) → Latin 'X'
+  [/\u03A7/g, "X"],
+  // Greek ο (U+03BF) → Latin 'o'
+  [/\u03BF/g, "o"],
 ];
 
 // ---------------------------------------------------------------------------
@@ -142,10 +182,11 @@ export function loadInjectionPatterns(confPath?: string): string[] {
  * Sanitize a text string to reduce prompt injection risk.
  *
  * Operations applied in order:
- * 1. Remove invisible unicode characters
- * 2. Normalize homoglyphs (Cyrillic → Latin) using both the homoglyph map
- *    and `unidecode` for broader coverage
- * 3. Remove sentences/phrases that match any loaded injection pattern
+ * 1. NFKC Unicode normalization (collapses fullwidth, mathematical variants,
+ *    and compatibility forms into base characters while preserving accented letters)
+ * 2. Remove invisible unicode characters
+ * 3. Normalize homoglyphs (Cyrillic/Greek → Latin) using the homoglyph map
+ * 4. Remove sentences/phrases that match any loaded injection pattern
  *    (case-insensitive whole-word match)
  *
  * @param text     The raw text to sanitize.
@@ -157,19 +198,21 @@ export function loadInjectionPatterns(confPath?: string): string[] {
 export function sanitizeText(text: string, patterns?: string[]): string {
   let result = text;
 
-  // 1. Strip invisible unicode characters
+  // 1. NFKC normalization — collapses fullwidth, mathematical alphanumerics,
+  //    and compatibility forms into base characters while preserving accented letters
+  result = result.normalize("NFKC");
+
+  // 2. Strip invisible unicode characters
   for (const [pattern, replacement] of INVISIBLE_CHARS) {
     result = result.replace(pattern, replacement);
   }
 
-  // 2. Normalize homoglyphs — first the explicit map, then unidecode
+  // 3. Normalize homoglyphs (Cyrillic and Greek → Latin)
   for (const [pattern, replacement] of HOMOGLYPH_MAP) {
     result = result.replace(pattern, replacement);
   }
-  // unidecode handles characters that don't have a direct homoglyph mapping
-  result = unidecode(result);
 
-  // 3. Remove injection pattern sentences
+  // 4. Remove injection pattern sentences
   const injectionPatterns = patterns ?? loadInjectionPatterns();
   for (const pattern of injectionPatterns) {
     if (!pattern) continue;

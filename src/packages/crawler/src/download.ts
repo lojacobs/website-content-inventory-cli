@@ -219,6 +219,7 @@ function hasDangerousExtension(url: string): boolean {
 
 export interface DownloadResult {
   html: string;
+  finalUrl: string;
   statusCode: number;
   lastModified?: string;
   contentType: string;
@@ -341,6 +342,7 @@ export async function downloadPage(
 
       return {
         html,
+        finalUrl: url,
         statusCode,
         lastModified,
         contentType,
