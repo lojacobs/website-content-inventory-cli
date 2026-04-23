@@ -14,7 +14,7 @@ import { extractMeta, type PageMeta } from "./meta.js";
 import { sanitizeHtml } from "./sanitize.js";
 import { htmlToText } from "./convert.js";
 import { sanitizeText, loadInjectionPatterns } from "./injection.js";
-import { discoverDomainUrls } from "./discover.js";
+import { discoverDomainUrls, discoverFolderUrls } from "./discover.js";
 import {
   upsertRow,
   readInventory,
@@ -249,8 +249,21 @@ export async function crawl(
   }
 
   if (mode === "folder") {
-    console.error(`[crawl] mode not yet implemented: ${mode}`);
-    process.exit(1);
+    if (urls.length === 0) {
+      console.error("[crawl] folder mode requires at least one seed URL");
+      process.exit(1);
+    }
+    const seedUrl = urls[0];
+    try {
+      const parsed = new URL(seedUrl);
+      domain = parsed.hostname;
+    } catch {
+      console.error("[crawl] invalid seed URL for folder mode");
+      process.exit(1);
+    }
+    const discovered = await discoverFolderUrls(seedUrl, { userAgent, timeout });
+    urlsToCrawl = discovered;
+    console.log(`[crawl] folder mode: discovered ${discovered.length} URL(s)`);
   }
 
   // Load the URL set once for O(1) resume checks
