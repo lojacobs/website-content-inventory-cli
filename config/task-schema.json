@@ -24,8 +24,8 @@
     },
     "type": {
       "type": "string",
-      "enum": ["feature", "bug", "refactor"],
-      "description": "Task classification."
+      "enum": ["feature", "bug", "task", "chore", "epic", "decision"],
+      "description": "Task classification. Use feature/bug/task/epic for deliverable work. chore is reserved for Orchestrator-generated tracking issues (question, security)."
     },
     "title": {
       "type": "string",
