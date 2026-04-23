@@ -19,8 +19,8 @@
   "properties": {
     "id": {
       "type": "string",
-      "pattern": "^task-[0-9]{3,}$",
-      "description": "Unique task identifier. Format: task-NNN (e.g. task-001)."
+      "minLength": 1,
+      "description": "Unique task identifier. Beads auto-generated ID (e.g. my-project-hv7) or legacy task-NNN format."
     },
     "type": {
       "type": "string",
@@ -55,11 +55,8 @@
     },
     "dependencies": {
       "type": "array",
-      "items": {
-        "type": "string",
-        "pattern": "^task-[0-9]{3,}$"
-      },
-      "description": "IDs of tasks that must be completed before this one can start. Empty array = no dependencies."
+      "items": { "type": "string", "minLength": 1 },
+      "description": "IDs of tasks that must be completed before this one can start. Use beads IDs. Empty array = no dependencies."
     },
     "acceptance_criteria": {
       "type": "array",
