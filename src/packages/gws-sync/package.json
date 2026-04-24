@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "type": "module",
   "description": "Google Workspace sync integration",
+  "bin": {
+    "fci-sync": "./dist/cli.js"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -13,12 +16,16 @@
   },
   "scripts": {
     "build": "tsc --build",
-    "clean": "rm -rf dist tsconfig.tsbuildinfo"
+    "clean": "rm -rf dist tsconfig.tsbuildinfo",
+    "test": "vitest run"
   },
   "dependencies": {
-    "@full-content-inventory/shared": "workspace:*"
+    "@full-content-inventory/shared": "workspace:*",
+    "execa": "*",
+    "commander": "*"
   },
   "devDependencies": {
-    "typescript": "^5.4.0"
+    "typescript": "^5.4.0",
+    "vitest": "*"
   }
 }
