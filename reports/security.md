@@ -6,6 +6,19 @@
 
 ---
 
+## Module: gw-sync — 2026-04-24
+**Triggered by:** full-content-inventory-integrated-c1p
+**Findings:**
+- [Medium] full-content-inventory-integrated-3ze: Path traversal in sync.ts urlToTxtPath — unsanitized URL pathname segments
+**Verified (no issue):**
+- No hardcoded credentials or secrets in gw-sync source files
+- All execa invocations use array arguments (no shell string construction)
+- `.sync-meta.json` is listed in `.gitignore`
+- `DriveFileBody` has no duplicate definitions (single source in types.ts)
+- `replaceImagesInDoc` remains a no-op stub per INV-05
+- No eval() or child_process usage
+**Disposition:** pending Planner review
+
 <!-- Template for each review:
 
 ## Module: {module-name} — {YYYY-MM-DD}
