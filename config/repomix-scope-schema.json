@@ -26,7 +26,8 @@
         ".env*",
         "*.svg",
         "*.png",
-        "*.jpg"
+        "*.jpg",
+        "**/context-slice.json"
     ]
  }
 }
