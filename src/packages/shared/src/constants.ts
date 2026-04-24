@@ -25,6 +25,9 @@ export const INVENTORY_COLUMNS = [
   'Fichiers_liés',
   'Lien_Google_Doc',
   'Lien_dossier_Drive',
+  'crawl_status',
+  'sync_status',
+  'ai_status',
 ] as const;
 
 export { type InventoryColumn };

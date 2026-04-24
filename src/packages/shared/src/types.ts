@@ -78,6 +78,12 @@ export interface InventoryRow {
   Lien_Google_Doc: string;
   /** Google Drive folder link (filled by gws-sync) */
   Lien_dossier_Drive: string;
+  /** Crawl status: 'done' | 'error' | undefined */
+  crawl_status?: string;
+  /** Sync status: 'done' | 'error' | undefined */
+  sync_status?: string;
+  /** AI processing status: 'done' | 'error' | undefined */
+  ai_status?: string;
 }
 
 /**
@@ -100,4 +106,7 @@ export type InventoryColumn =
   | 'Nb_images'
   | 'Fichiers_liés'
   | 'Lien_Google_Doc'
-  | 'Lien_dossier_Drive';
+  | 'Lien_dossier_Drive'
+  | 'crawl_status'
+  | 'sync_status'
+  | 'ai_status';

@@ -21,10 +21,11 @@
   },
   "dependencies": {
     "@full-content-inventory/shared": "workspace:*",
-    "execa": "*",
-    "commander": "*"
+    "commander": "*",
+    "execa": "*"
   },
   "devDependencies": {
+    "@types/node": "^25.6.0",
     "typescript": "^5.4.0",
     "vitest": "*"
   }
