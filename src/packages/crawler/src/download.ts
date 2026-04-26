@@ -65,67 +65,49 @@ interface WgetMeta {
 
 /**
  * Parse HTTP status, Last-Modified, Content-Type, and Content-Length
- * from a wget --debug stderr stream.
+ * from wget --server-response stderr.
  *
- * wget --debug prints headers like:
- *   HTTP response sent.  Flags: 200 OK
+ * wget --server-response prints HTTP/1.x status lines and headers for each
+ * request/redirect. The first HTTP/1.x block is the final response (after
+ * wget follows redirects automatically).
+ *
+ * Example output:
+ *   HTTP/1.1 200 OK
  *   Content-Type: text/html; charset=utf-8
  *   Content-Length: 12345
  *   Last-Modified: Mon, 01 Jan 2024 00:00:00 GMT
  */
-function parseWgetDebugStderr(stderr: string): WgetMeta {
-  const statusRe = /^HTTP response sent\.\s+Flags:\s+(\d{3})\s+/m;
-  const contentTypeRe = /^  Content-Type:\s+(.+)$/m;
-  const contentLengthRe = /^  Content-Length:\s+(\d+)$/m;
-  const lastModifiedRe = /^  Last-Modified:\s+(.+)$/m;
+function parseWgetServerResponse(stderr: string): WgetMeta {
+  // Split into lines; wget may prepend timestamps or indentation
+  const lines = stderr.split("\n").map((l) => l.trim());
 
-  const statusMatch = stderr.match(statusRe);
-  const contentTypeMatch = stderr.match(contentTypeRe);
-  const contentLengthMatch = stderr.match(contentLengthRe);
-  const lastModifiedMatch = stderr.match(lastModifiedRe);
-
-  const statusCode = statusMatch ? parseInt(statusMatch[1], 10) : 0;
-  const rawContentType = contentTypeMatch ? contentTypeMatch[1].trim() : "";
-  // Strip charset; keep only the MIME type
-  const contentType = rawContentType.split(";")[0].trim().toLowerCase();
-
-  const contentLength = contentLengthMatch
-    ? parseInt(contentLengthMatch[1], 10)
-    : undefined;
-
+  let statusCode = 0;
+  let contentType = "";
+  let contentLength: number | undefined;
   let lastModified: string | undefined;
-  if (lastModifiedMatch) {
-    const dateStr = lastModifiedMatch[1].trim();
-    lastModified = parseHttpDate(dateStr);
-  }
 
-  return { statusCode, lastModified, contentType, contentLength };
-}
+  for (const line of lines) {
+    // HTTP/1.1 200 OK  or  HTTP/1.0 301 Moved Permanently
+    const statusMatch = line.match(/^HTTP\/[\d.]+\s+(\d{3})\s*/);
+    if (statusMatch) {
+      statusCode = parseInt(statusMatch[1], 10);
+      continue;
+    }
 
-/** Fallback parser for non-debug wget stderr (minimal info). */
-function parseWgetStderr(stderr: string): WgetMeta {
-  const statusRe = /^HTTP\s+\d{3}\s+/m;
-  const contentTypeRe = /^Content-Type:\s*(.+)$/m;
-  const contentLengthRe = /^Length:\s*(\d+)/m;
-  const lastModifiedRe = /^Last-Modified:\s*(.+)$/m;
+    if (line.startsWith("Content-Type:")) {
+      contentType = line.replace("Content-Type:", "").trim().split(";")[0].toLowerCase();
+      continue;
+    }
 
-  const statusMatch = stderr.match(statusRe);
-  const contentTypeMatch = stderr.match(contentTypeRe);
-  const contentLengthMatch = stderr.match(contentLengthRe);
-  const lastModifiedMatch = stderr.match(lastModifiedRe);
+    if (line.startsWith("Content-Length:")) {
+      contentLength = parseInt(line.replace("Content-Length:", "").trim(), 10);
+      continue;
+    }
 
-  const statusCode = statusMatch
-    ? parseInt(statusMatch[0].split(/\s+/)[1], 10)
-    : 0;
-  const rawContentType = contentTypeMatch ? contentTypeMatch[1].trim() : "";
-  const contentType = rawContentType.split(";")[0].trim().toLowerCase();
-  const contentLength = contentLengthMatch
-    ? parseInt(contentLengthMatch[1], 10)
-    : undefined;
-
-  let lastModified: string | undefined;
-  if (lastModifiedMatch) {
-    lastModified = parseHttpDate(lastModifiedMatch[1].trim());
+    if (line.startsWith("Last-Modified:")) {
+      lastModified = parseHttpDate(line.replace("Last-Modified:", "").trim());
+      continue;
+    }
   }
 
   return { statusCode, lastModified, contentType, contentLength };
@@ -298,7 +280,7 @@ export async function downloadPage(
         "wget",
         [
           "--quiet",
-          "--debug",
+          "--server-response",
           "--no-clobber",
           "--output-document", tmpPath,
           "--user-agent", userAgent,
@@ -316,12 +298,8 @@ export async function downloadPage(
 
       const html = stdout;
 
-      // 3. Parse metadata from stderr
-      let meta = parseWgetDebugStderr(stderr);
-      // If --debug didn't yield enough, try the simpler parser
-      if (meta.statusCode === 0) {
-        meta = parseWgetStderr(stderr);
-      }
+      // 3. Parse metadata from stderr (HTTP/1.x status lines + headers)
+      const meta = parseWgetServerResponse(stderr);
 
       const { statusCode, lastModified, contentType, contentLength } = meta;
 
