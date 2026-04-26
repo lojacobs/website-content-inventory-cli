@@ -68,8 +68,8 @@ export interface InventoryRow {
   Date_modifiee: string;
   /** Canonical URL if present */
   Canonical: string;
-  /** Whether page has noindex directive */
-  Noindex: boolean;
+  /** Whether page has noindex directive ('yes' or 'no') */
+  Noindex: string;
   /** Number of images on the page */
   Nb_images: number;
   /** Number of linked files (PDF, DOC, etc.) */

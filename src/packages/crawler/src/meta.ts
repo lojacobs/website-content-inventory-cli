@@ -28,8 +28,8 @@ export interface PageMeta {
   Langue: string;
   /** Canonical URL from <link rel="canonical"> */
   Canonical: string;
-  /** Whether page has noindex directive */
-  Noindex: boolean;
+  /** Whether page has noindex directive ('yes' or 'no') */
+  Noindex: string;
   /** Number of images on the page */
   Nb_images: number;
   /** Number of linked files (PDF, DOC, XLS, PPT, ZIP) */
@@ -69,9 +69,9 @@ export function extractMeta(
   // Extract canonical URL
   const Canonical = $('link[rel="canonical"]').attr("href") || "";
 
-  // Check for noindex in robots meta
+  // Check for noindex in robots meta — emit explicit string for CSV serialization
   const robotsContent = $('meta[name="robots"]').attr("content") || "";
-  const Noindex = robotsContent.toLowerCase().includes("noindex");
+  const Noindex = robotsContent.toLowerCase().includes("noindex") ? "yes" : "no";
 
   // Count images
   const Nb_images = $("img").length;

@@ -148,27 +148,34 @@ export async function processPage(
     userAgent,
     timeout,
   };
-  const { html, statusCode, lastModified, finalUrl } = await downloadPage(url, downloadOptions);
+  const { html, statusCode, lastModified, finalUrl, contentType } = await downloadPage(url, downloadOptions);
 
-  // 2. Extract metadata
+  // 2. Extract metadata (for non-HTML, body is still parseable by cheerio for links/img counts)
   const headers = lastModified ? { "last-modified": lastModified } : undefined;
   const meta: PageMeta = extractMeta(html, url, headers);
 
-  // 3. Sanitize HTML (remove nav, scripts, footers, etc.)
-  const sanitizedHtml = sanitizeHtml(html);
-
-  // 4. Convert sanitized HTML → plain text
-  const rawText = htmlToText(sanitizedHtml);
-
-  // 5. Detect / sanitize prompt-injection artefacts
-  const cleanText = sanitizeText(rawText, patterns);
-
-  // 6. Write .txt file
+  // 3–6 only apply to HTML content
+  const isHtml = contentType.toLowerCase().startsWith("text/html");
   const filename = urlToFilename(url);
-  const txtPath = join(domainDir, filename);
-  await ensureDirForFile(txtPath);
-  const { writeFile } = await import("node:fs/promises");
-  await writeFile(txtPath, cleanText, "utf-8");
+
+  if (isHtml) {
+    // 3. Sanitize HTML (remove nav, scripts, footers, etc.)
+    const sanitizedHtml = sanitizeHtml(html);
+
+    // 4. Convert sanitized HTML → plain text
+    const rawText = htmlToText(sanitizedHtml);
+
+    // 5. Detect / sanitize prompt-injection artefacts
+    const cleanText = sanitizeText(rawText, patterns);
+
+    // 6. Write .txt file
+    const txtPath = join(domainDir, filename);
+    await ensureDirForFile(txtPath);
+    const { writeFile } = await import("node:fs/promises");
+    await writeFile(txtPath, cleanText, "utf-8");
+  } else {
+    console.log(`[crawl] ◇ skipped txt  ${url}  (${contentType})`);
+  }
 
   // 7. Build inventory row
   const description = meta.Description ?? "";
@@ -184,18 +191,22 @@ export async function processPage(
     Langue: meta.Langue ?? "und",
     Date_modifiee: meta.Date_modifiee ?? "",
     Canonical: meta.Canonical ?? "",
-    Noindex: meta.Noindex ?? false,
+    Noindex: meta.Noindex ?? "no",
     Nb_images: meta.Nb_images ?? 0,
     Fichiers_liés: meta.Fichiers_liés ?? 0,
     Lien_Google_Doc: "",
     Lien_dossier_Drive: "",
+    crawl_status: "done",
     URL_finale: finalUrl !== url ? finalUrl : undefined,
   };
 
   // 8. Upsert CSV row
   await upsertRow(inventoryPath, inventoryRow, "URL");
 
-  console.log(`[crawl] ✓ processed  ${url}  →  ${relative(outputDir, txtPath)}`);
+  const logPath = isHtml
+    ? relative(outputDir, join(domainDir, filename))
+    : `${contentType} → skipped txt`;
+  console.log(`[crawl] ✓ processed  ${url}  →  ${logPath}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -228,53 +239,47 @@ export async function crawl(
     mode,
   } = options;
 
-  // For domain mode, derive the output base path from the seed URL's domain
+  // Derive the output base domain (hostname) from the seed URL's origin.
+  // This is used to compute the inventory path and must match what processPage()
+  // computes internally from each URL — otherwise resume and CSV upserts break.
   let domain = "";
   let urlsToCrawl = urls;
+  if (urls.length === 0) {
+    console.error("[crawl] at least one seed URL is required");
+    process.exit(1);
+  }
+  try {
+    domain = new URL(urls[0]).hostname;
+  } catch {
+    console.error("[crawl] invalid seed URL — cannot extract hostname");
+    process.exit(1);
+  }
+
   if (mode === "domain") {
-    if (urls.length === 0) {
-      console.error("[crawl] domain mode requires at least one seed URL");
-      process.exit(1);
-    }
-    try {
-      const seedUrl = new URL(urls[0]);
-      domain = seedUrl.hostname;
-    } catch {
-      console.error("[crawl] invalid seed URL for domain mode");
-      process.exit(1);
-    }
     const discovered = await discoverDomainUrls(urls[0], { userAgent, timeout });
     urlsToCrawl = discovered;
     console.log(`[crawl] domain mode: discovered ${discovered.length} URL(s)`);
   }
 
   if (mode === "folder") {
-    if (urls.length === 0) {
-      console.error("[crawl] folder mode requires at least one seed URL");
-      process.exit(1);
-    }
-    const seedUrl = urls[0];
-    try {
-      const parsed = new URL(seedUrl);
-      domain = parsed.hostname;
-    } catch {
-      console.error("[crawl] invalid seed URL for folder mode");
-      process.exit(1);
-    }
-    const discovered = await discoverFolderUrls(seedUrl, { userAgent, timeout });
+    const discovered = await discoverFolderUrls(urls[0], { userAgent, timeout });
     urlsToCrawl = discovered;
     console.log(`[crawl] folder mode: discovered ${discovered.length} URL(s)`);
   }
 
-  // Load the URL set once for O(1) resume checks
+  // Load the URL set once for O(1) resume checks.
+  // Uses the same path as processPage() so resume correctly skips already-crawled URLs.
   const resolvedInventoryPath = join(outputDir, `${client}_${project}`, domain, "_inventory.csv");
   const doneUrls = resume ? await loadDoneUrls(resolvedInventoryPath) : new Set<string>();
 
   // Pre-load injection patterns so they are shared across all pages
   const activePatterns = patterns ?? loadInjectionPatterns();
 
-  // Ensure the output CSV has headers before the first upsert
+  // Ensure the output CSV has headers before the first upsert.
+  // Parent directories are created here so that writeInventory() (which does
+  // not create dirs) never crashes on a missing parent directory.
   if (!existsSync(resolvedInventoryPath)) {
+    await ensureDirForFile(resolvedInventoryPath);
     await writeInventory(resolvedInventoryPath, []);
   }
 
@@ -283,8 +288,9 @@ export async function crawl(
   let first = true;
 
   for (const url of urlsToCrawl) {
-    if (resume && doneUrls.has(url)) {
-      console.log(`[crawl] ↷ skip (done)  ${url}`);
+    const normalized = stripHash(url);
+    if (resume && doneUrls.has(normalized)) {
+      console.log(`[crawl] ↷ skip (done)  ${normalized}`);
       skipped++;
       continue;
     }
@@ -295,7 +301,7 @@ export async function crawl(
     first = false;
 
     try {
-      await processPage(url, domain, {
+      await processPage(normalized, domain, {
         outputDir,
         client,
         project,
@@ -319,7 +325,17 @@ export async function crawl(
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Load the set of already-crawled URLs from the inventory CSV. */
+/** Strip the fragment (#...) from a URL. Returns the URL unchanged on failure. */
+function stripHash(url: string): string {
+  try {
+    const u = new URL(url);
+    u.hash = "";
+    return u.href;
+  } catch {
+    return url;
+  }
+}
+
 /** Pause execution for `ms` milliseconds. */
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
