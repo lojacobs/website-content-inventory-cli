@@ -17,6 +17,7 @@ export function readInventory(path: string): Promise<InventoryRow[]> {
   return readFile(path, 'utf-8').then((content) => {
     const records = parse(content, {
       columns: [...INVENTORY_COLUMNS],
+      from_line: 2,
       skip_empty_lines: true,
       bom: true,
     }) as InventoryRow[];

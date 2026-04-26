@@ -286,7 +286,6 @@ export async function downloadPage(
           "--user-agent", userAgent,
           "--timeout", String(timeout),
           "--tries", "1",
-          "--server-response",
           "-O", "-", // write to stdout for easy capture
           url,
         ],

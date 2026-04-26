@@ -7,12 +7,36 @@ import type { FolderNode, ImageMarker, SyncConfig, SyncMeta } from './types.js';
 import { ensureDriveFolder, uploadAsDoc, uploadAsSheet, updateSheet } from './drive.js';
 import { readFile, writeFile } from 'node:fs/promises';
 import { resolve, dirname } from 'node:path';
+
+// ---------------------------------------------------------------------------
+// Path-traversal guard
+// ---------------------------------------------------------------------------
+
+/**
+ * Assert that a resolved file path stays within the given base directory.
+ * Throws if the resolved path escapes the directory.
+ *
+ * Security note: this check uses `resolve()` (not `realpath()`), so symlinks
+ * inside `dir` are NOT followed. A symlink in the inventory directory could
+ * redirect a read to an arbitrary location. This is acceptable for the current
+ * threat model (single-tenant, app-owned output directory).
+ */
+export function assertPathWithinDir(filePath: string, dir: string): void {
+  const resolvedFile = resolve(filePath);
+  const resolvedDir = resolve(dir);
+  const prefix = resolvedDir.endsWith('/') ? resolvedDir : resolvedDir + '/';
+  if (!resolvedFile.startsWith(prefix) && resolvedFile !== resolvedDir) {
+    throw new Error(
+      `Path traversal blocked: ${resolvedFile} is outside ${resolvedDir}`
+    );
+  }
+}
 import { URL } from 'node:url';
 
 // ---------------------------------------------------------------------------
 // Helper: replicate crawler's url → .txt relative path mapping
 // ---------------------------------------------------------------------------
-function urlToTxtPath(url: string): string {
+export function urlToTxtPath(url: string): string {
   const { pathname } = new URL(url);
   if (pathname === '/' || pathname === '/index.html' || pathname === '/index') {
     return 'homepage.txt';
@@ -21,11 +45,25 @@ function urlToTxtPath(url: string): string {
     .replace(/^\//, '')
     .replace(/\/index$/, '');
   const segments = normalized.split('/').filter(Boolean);
-  const lastIdx = segments.length - 1;
+  // Harden against path traversal: decode percent-encoded dots (including double-encoded),
+  // then reject . and .. segments.
+  const safeSegments = segments
+    .map((seg) => {
+      // Bounded iterative decode to handle double- (or triple-) encoded sequences
+      let decoded = seg;
+      for (let i = 0; i < 3; i++) {
+        const next = decodeURIComponent(decoded);
+        if (next === decoded) break;
+        decoded = next;
+      }
+      return decoded;
+    })
+    .filter((seg) => seg !== '.' && seg !== '..');
+  const lastIdx = safeSegments.length - 1;
   if (lastIdx >= 0) {
-    segments[lastIdx] = segments[lastIdx].replace(/\.(html?|php|aspx)$/i, '');
+    safeSegments[lastIdx] = safeSegments[lastIdx].replace(/\.(html?|php|aspx)$/i, '');
   }
-  return segments.join('/') + '.txt';
+  return safeSegments.join('/') + '.txt';
 }
 
 // ---------------------------------------------------------------------------
@@ -212,6 +250,9 @@ export async function sync(config: SyncConfig): Promise<void> {
     try {
       // Determine local .txt file path
       const localTxtPath = resolve(invDir, urlToTxtPath(row.URL));
+
+      // Path-traversal guard
+      assertPathWithinDir(localTxtPath, invDir);
 
       // Read .txt content
       const content = await readFile(localTxtPath, 'utf-8');

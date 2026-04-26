@@ -27,7 +27,7 @@ vi.mock('node:fs/promises', () => ({
 // Import after all mocks are registered
 // ---------------------------------------------------------------------------
 
-import { buildFolderTree, parseImageMarkers, sync } from '../src/sync.js';
+import { buildFolderTree, parseImageMarkers, sync, urlToTxtPath, assertPathWithinDir } from '../src/sync.js';
 import * as shared from '@full-content-inventory/shared';
 import * as drive from '../src/drive.js';
 
@@ -163,6 +163,100 @@ describe('sync — resume behavior', () => {
 
     // Both rows should be processed (resume=false ignores sync_status).
     expect(drive.uploadAsDoc).toHaveBeenCalledTimes(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// sync — error isolation
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// urlToTxtPath — path traversal hardening
+// ---------------------------------------------------------------------------
+
+describe('urlToTxtPath', () => {
+  it('filters out .. segments', () => {
+    expect(urlToTxtPath('https://evil.com/../../../etc/passwd')).toBe('etc/passwd.txt');
+    expect(urlToTxtPath('https://example.com/a/../b/page.html')).toBe('b/page.txt');
+  });
+
+  it('filters out . segments', () => {
+    expect(urlToTxtPath('https://example.com/./page.html')).toBe('page.txt');
+    expect(urlToTxtPath('https://example.com/a/./b/page.html')).toBe('a/b/page.txt');
+  });
+
+  it('preserves normal paths unchanged', () => {
+    expect(urlToTxtPath('https://example.com/about.html')).toBe('about.txt');
+    expect(urlToTxtPath('https://example.com/a/b/page.html')).toBe('a/b/page.txt');
+  });
+
+  it('maps root paths to homepage.txt', () => {
+    expect(urlToTxtPath('https://example.com/')).toBe('homepage.txt');
+    expect(urlToTxtPath('https://example.com/index.html')).toBe('homepage.txt');
+  });
+
+  it('filters out percent-encoded .. and . segments', () => {
+    expect(urlToTxtPath('https://evil.com/%2e%2e/etc/passwd')).toBe('etc/passwd.txt');
+    expect(urlToTxtPath('https://example.com/a/%2e%2e/b/page.html')).toBe('b/page.txt');
+    expect(urlToTxtPath('https://example.com/%2e/page.html')).toBe('page.txt');
+  });
+
+  it('filters out double-encoded .. segments', () => {
+    expect(urlToTxtPath('https://evil.com/%252e%252e/etc/passwd')).toBe('etc/passwd.txt');
+    // When .. is between segments, it is removed (not resolved), so a/..  →  a
+    expect(urlToTxtPath('https://example.com/a/%252e%252e/b/page.html')).toBe('a/b/page.txt');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// sync — path traversal guard
+// ---------------------------------------------------------------------------
+
+describe('assertPathWithinDir', () => {
+  it('throws when a resolved path escapes the base directory', () => {
+    expect(() => assertPathWithinDir('/tmp/inventory/../../etc/passwd', '/tmp/inventory')).toThrow(
+      'Path traversal blocked'
+    );
+  });
+
+  it('throws when an absolute path outside the base is provided', () => {
+    expect(() => assertPathWithinDir('/etc/passwd', '/tmp/inventory')).toThrow(
+      'Path traversal blocked'
+    );
+  });
+
+  it('does not throw for paths inside the base directory', () => {
+    expect(() => assertPathWithinDir('/tmp/inventory/a/page.txt', '/tmp/inventory')).not.toThrow();
+    expect(() => assertPathWithinDir('/tmp/inventory/homepage.txt', '/tmp/inventory')).not.toThrow();
+  });
+});
+
+describe('sync — path traversal guard', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(shared.readInventory).mockResolvedValue([]);
+    vi.mocked(shared.writeInventory).mockResolvedValue();
+    vi.mocked(drive.ensureDriveFolder).mockResolvedValue('folder-id');
+    vi.mocked(drive.uploadAsDoc).mockResolvedValue('doc-id');
+    vi.mocked(drive.uploadAsSheet).mockResolvedValue('sheet-id');
+    vi.mocked(drive.updateSheet).mockResolvedValue();
+  });
+
+  it('processes normal rows without triggering the guard', async () => {
+    const rows: InventoryRow[] = [
+      { URL: 'https://example.com/a/page.html', crawl_status: 'done' } as InventoryRow,
+    ];
+    vi.mocked(shared.readInventory).mockResolvedValue(rows);
+
+    const fs = await import('node:fs/promises');
+    vi.mocked(fs.readFile).mockResolvedValue('safe content' as never);
+
+    await sync({
+      inventoryPath: '/tmp/inventory/_inventory.csv',
+      driveFolderId: 'folder-1',
+    });
+
+    expect(drive.uploadAsDoc).toHaveBeenCalledTimes(1);
   });
 });
 

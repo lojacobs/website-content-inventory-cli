@@ -145,13 +145,28 @@ export function extractLinks(html: string, base: string): string[] {
     try {
       const url = new URL(href, base);
       if (url.protocol === "http:" || url.protocol === "https:") {
-        absolute.push(url.href);
+        absolute.push(stripHash(url.href));
       }
     } catch {
       // skip invalid URL
     }
   }
   return [...new Set(absolute)];
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Strip the fragment (#...) from a URL. Returns the URL unchanged on failure. */
+function stripHash(url: string): string {
+  try {
+    const u = new URL(url);
+    u.hash = "";
+    return u.href;
+  } catch {
+    return url;
+  }
 }
 
 // ---------------------------------------------------------------------------

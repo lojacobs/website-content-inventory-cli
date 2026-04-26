@@ -65,7 +65,9 @@ export function sanitizeHtml(html: string): string {
     changed = false;
     for (const keyword of REMOVAL_KEYWORDS) {
       // Match case-insensitively using regex
-      const selector = `[class*="${keyword}" i], [id*="${keyword}" i]`;
+      // Exclude structural container tags to prevent entire page content removal
+      // (e.g., <body class="x-navbar-fixed-top-active"> would match "nav" in "navbar")
+      const selector = `:not(body):not(html):not(main)[class*="${keyword}" i], :not(body):not(html):not(main)[id*="${keyword}" i]`;
       const elements = $(selector);
       if (elements.length > 0) {
         elements.remove();
