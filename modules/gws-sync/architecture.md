@@ -1,4 +1,4 @@
-# Architecture — gw-sync
+# Architecture — gws-sync
 
 ## Domain Model
 

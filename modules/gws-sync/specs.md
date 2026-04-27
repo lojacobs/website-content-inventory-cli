@@ -1,4 +1,4 @@
-# Specs — gw-sync
+# Specs — gws-sync
 
 ## Module Purpose
 
