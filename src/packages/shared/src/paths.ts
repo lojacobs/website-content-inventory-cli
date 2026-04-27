@@ -5,6 +5,7 @@
 import { URL } from 'node:url';
 import { dirname } from 'node:path';
 import { access, mkdir } from 'node:fs/promises';
+import unidecode from 'unidecode';
 
 /**
  * Convert a URL to a relative file path
@@ -73,5 +74,77 @@ export async function ensureDirForFile(filePath: string): Promise<void> {
   const dir = dirname(filePath);
   if (dir && dir !== '.') {
     await ensureDir(dir);
+  }
+}
+
+/**
+ * Convert a URL to a safe relative path for local .txt file storage.
+ *
+ * This function is the single source of truth used by both the crawler
+ * (to write .txt files) and gws-sync (to find them again). It must produce
+ * identical output on both sides.
+ *
+ * Behavior:
+ *   /, /index.html, /index          → "homepage.txt"
+ *   /café/page.html                  → "cafe/page.txt"  (unidecode transliteration)
+ *   /page with spaces.html            → "page-with-spaces.html"  (special chars → -)
+ *   /.html files stripped before sanitization so dots in the middle are preserved
+ */
+export function urlToFilename(url: string): string {
+  try {
+    const { pathname } = new URL(url);
+    const decoded = unidecode(pathname);
+
+    // Normalize common index variants
+    if (pathname === '/' || pathname === '/index.html' || pathname === '/index') {
+      return 'homepage.txt';
+    }
+
+    // Strip leading slash and normalize path
+    const normalizedPath = decoded
+      .replace(/^\//, '')  // strip leading slash
+      .replace(/\/index$/, '');  // strip trailing /index
+
+    // Split into segments; decode percent-encoded dots (including double-encoded)
+    // to catch traversal attempts, then filter them out.
+    const segments = normalizedPath.split('/').filter(Boolean);
+    const safeSegments = segments
+      .map((seg) => {
+        let decoded = seg;
+        for (let i = 0; i < 3; i++) {
+          const next = decodeURIComponent(decoded);
+          if (next === decoded) break;
+          decoded = next;
+        }
+        return decoded;
+      })
+      .filter((seg) => seg !== '.' && seg !== '..');
+
+    // For the last segment (filename), strip known web extensions
+    // before sanitization so dots in the middle are preserved correctly
+    const lastIdx = safeSegments.length - 1;
+    if (lastIdx >= 0) {
+      safeSegments[lastIdx] = safeSegments[lastIdx]
+        .replace(/\.(html?|php|aspx)$/i, '');
+    }
+
+    // Sanitize each segment: replace invalid chars with hyphens
+    const sanitized = safeSegments.map((seg) =>
+      seg
+        .replace(/[^a-zA-Z0-9_\-.]/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '')
+    );
+
+    // Rejoin with real directory separators
+    return sanitized.join('/') + '.txt';
+  } catch {
+    // Fallback for invalid URLs
+    const safe = unidecode(url)
+      .replace(/[^a-zA-Z0-9]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '')
+      || 'unknown';
+    return safe + '.txt';
   }
 }

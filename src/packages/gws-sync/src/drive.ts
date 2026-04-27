@@ -3,6 +3,7 @@
  * All functions use execa to invoke the gws CLI.
  */
 
+import { dirname } from 'node:path';
 import { execa } from 'execa';
 import type { DriveFileBody } from './types.js';
 
@@ -77,17 +78,16 @@ export async function uploadAsDoc(localPath: string, parentId: string): Promise<
     parents: [parentId],
   };
 
-  const result = await execa('gws', [
-    'drive',
-    'files',
-    'create',
-    '--upload',
-    localPath,
-    '--upload-content-type',
-    'text/plain',
-    '--json',
-    JSON.stringify(body),
-  ]);
+  const result = await execa(
+    'gws',
+    [
+      'drive', 'files', 'create',
+      '--upload', basename(localPath),
+      '--upload-content-type', 'text/plain',
+      '--json', JSON.stringify(body),
+    ],
+    { cwd: dirname(localPath) },
+  );
 
   if (result.exitCode !== 0) {
     throw new Error(`gws drive files create (doc) failed: ${result.stderr}`);
@@ -109,17 +109,16 @@ export async function uploadAsSheet(localPath: string, parentId: string): Promis
     parents: [parentId],
   };
 
-  const result = await execa('gws', [
-    'drive',
-    'files',
-    'create',
-    '--upload',
-    localPath,
-    '--upload-content-type',
-    'text/csv',
-    '--json',
-    JSON.stringify(body),
-  ]);
+  const result = await execa(
+    'gws',
+    [
+      'drive', 'files', 'create',
+      '--upload', basename(localPath),
+      '--upload-content-type', 'text/csv',
+      '--json', JSON.stringify(body),
+    ],
+    { cwd: dirname(localPath) },
+  );
 
   if (result.exitCode !== 0) {
     throw new Error(`gws drive files create (sheet) failed: ${result.stderr}`);
@@ -134,16 +133,15 @@ export async function uploadAsSheet(localPath: string, parentId: string): Promis
  * Returns void on success.
  */
 export async function updateSheet(localPath: string, sheetsId: string): Promise<void> {
-  const result = await execa('gws', [
-    'drive',
-    'files',
-    'update',
-    sheetsId,
-    '--upload',
-    localPath,
-    '--upload-content-type',
-    'text/csv',
-  ]);
+  const result = await execa(
+    'gws',
+    [
+      'drive', 'files', 'update', sheetsId,
+      '--upload', basename(localPath),
+      '--upload-content-type', 'text/csv',
+    ],
+    { cwd: dirname(localPath) },
+  );
 
   if (result.exitCode !== 0) {
     throw new Error(`gws drive files update failed: ${result.stderr}`);

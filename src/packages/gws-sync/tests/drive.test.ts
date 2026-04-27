@@ -108,17 +108,16 @@ describe('uploadAsDoc', () => {
     const result = await uploadAsDoc('/path/to/page.txt', 'folder-1');
 
     expect(result).toBe('doc-456');
-    expect(execaMock).toHaveBeenCalledWith('gws', expect.any(Array));
-    const callArgs = execaMock.mock.calls[0]![1] as string[];
-    expect(callArgs).toContain('drive');
-    expect(callArgs).toContain('files');
-    expect(callArgs).toContain('create');
-    expect(callArgs).toContain('--upload-content-type');
-    expect(callArgs).toContain('text/plain');
-    // mimeType appears inside the --json body
-    const jsonArg = callArgs.find((a) => a.startsWith('{"name'));
-    expect(jsonArg).toBeDefined();
-    expect(jsonArg).toContain('application/vnd.google-apps.document');
+    expect(execaMock).toHaveBeenCalledWith(
+      'gws',
+      expect.arrayContaining([
+        'drive', 'files', 'create',
+        '--upload', 'page.txt',
+        '--upload-content-type', 'text/plain',
+      ]),
+      expect.objectContaining({ cwd: '/path/to' }),
+    );
+    expect(execaMock).toHaveBeenCalledTimes(1);
   });
 
   it('throws an error when the upload fails', async () => {
@@ -154,16 +153,16 @@ describe('uploadAsSheet', () => {
     const result = await uploadAsSheet('/path/to/data.csv', 'folder-1');
 
     expect(result).toBe('sheet-789');
-    expect(execaMock).toHaveBeenCalledWith('gws', expect.any(Array));
-    const callArgs = execaMock.mock.calls[0]![1] as string[];
-    expect(callArgs).toContain('drive');
-    expect(callArgs).toContain('files');
-    expect(callArgs).toContain('create');
-    expect(callArgs).toContain('--upload-content-type');
-    expect(callArgs).toContain('text/csv');
-    const jsonArg = callArgs.find((a) => a.startsWith('{"name'));
-    expect(jsonArg).toBeDefined();
-    expect(jsonArg).toContain('application/vnd.google-apps.spreadsheet');
+    expect(execaMock).toHaveBeenCalledWith(
+      'gws',
+      expect.arrayContaining([
+        'drive', 'files', 'create',
+        '--upload', 'data.csv',
+        '--upload-content-type', 'text/csv',
+      ]),
+      expect.objectContaining({ cwd: '/path/to' }),
+    );
+    expect(execaMock).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -179,8 +178,14 @@ describe('updateSheet', () => {
 
     expect(execaMock).toHaveBeenCalledWith(
       'gws',
-      expect.arrayContaining(['drive', 'files', 'update', 'sheet-789'])
+      expect.arrayContaining([
+        'drive', 'files', 'update', 'sheet-789',
+        '--upload', 'data.csv',
+        '--upload-content-type', 'text/csv',
+      ]),
+      expect.objectContaining({ cwd: '/path/to' }),
     );
+    expect(execaMock).toHaveBeenCalledTimes(1);
   });
 
   it('throws an error when the update fails', async () => {

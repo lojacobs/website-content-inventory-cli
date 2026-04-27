@@ -17,7 +17,8 @@
   },
   "dependencies": {
     "csv-parse": "^6.2.1",
-    "csv-stringify": "^6.7.0"
+    "csv-stringify": "^6.7.0",
+    "unidecode": "^1.1.0"
   },
   "devDependencies": {
     "@types/node": "^25.6.0",

@@ -10,6 +10,7 @@ import type { InventoryColumn } from './types.js';
  */
 export const INVENTORY_COLUMNS = [
   'URL',
+  'URL_finale',
   'Titre',
   'Description',
   'Resume_200_chars',

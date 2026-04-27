@@ -2,7 +2,7 @@
  * gws-sync — main orchestrator: build folder trees, parse image markers, sync to Drive.
  */
 
-import { readInventory, writeInventory, type InventoryRow } from '@full-content-inventory/shared';
+import { readInventory, writeInventory, type InventoryRow, urlToFilename } from '@full-content-inventory/shared';
 import type { FolderNode, ImageMarker, SyncConfig, SyncMeta } from './types.js';
 import { ensureDriveFolder, uploadAsDoc, uploadAsSheet, updateSheet } from './drive.js';
 import { readFile, writeFile } from 'node:fs/promises';
@@ -32,39 +32,6 @@ export function assertPathWithinDir(filePath: string, dir: string): void {
   }
 }
 import { URL } from 'node:url';
-
-// ---------------------------------------------------------------------------
-// Helper: replicate crawler's url → .txt relative path mapping
-// ---------------------------------------------------------------------------
-export function urlToTxtPath(url: string): string {
-  const { pathname } = new URL(url);
-  if (pathname === '/' || pathname === '/index.html' || pathname === '/index') {
-    return 'homepage.txt';
-  }
-  const normalized = pathname
-    .replace(/^\//, '')
-    .replace(/\/index$/, '');
-  const segments = normalized.split('/').filter(Boolean);
-  // Harden against path traversal: decode percent-encoded dots (including double-encoded),
-  // then reject . and .. segments.
-  const safeSegments = segments
-    .map((seg) => {
-      // Bounded iterative decode to handle double- (or triple-) encoded sequences
-      let decoded = seg;
-      for (let i = 0; i < 3; i++) {
-        const next = decodeURIComponent(decoded);
-        if (next === decoded) break;
-        decoded = next;
-      }
-      return decoded;
-    })
-    .filter((seg) => seg !== '.' && seg !== '..');
-  const lastIdx = safeSegments.length - 1;
-  if (lastIdx >= 0) {
-    safeSegments[lastIdx] = safeSegments[lastIdx].replace(/\.(html?|php|aspx)$/i, '');
-  }
-  return safeSegments.join('/') + '.txt';
-}
 
 // ---------------------------------------------------------------------------
 // buildFolderTree
@@ -186,7 +153,7 @@ export async function sync(config: SyncConfig): Promise<void> {
   const allRows = await readInventory(inventoryPath);
 
   // Step 2: Filter to rows where crawl_status === 'done'
-  const crawledRows = allRows.filter((row) => row.crawl_status === 'done');
+  const crawledRows = allRows.filter((row) => row.crawl_status === 'done' || !row.crawl_status);
 
   // Step 3: If resume is true (default), skip rows where sync_status === 'done'
   const rowsToProcess = resume
@@ -249,7 +216,7 @@ export async function sync(config: SyncConfig): Promise<void> {
   for (const row of rowsToProcess) {
     try {
       // Determine local .txt file path
-      const localTxtPath = resolve(invDir, urlToTxtPath(row.URL));
+      const localTxtPath = resolve(invDir, urlToFilename(row.URL));
 
       // Path-traversal guard
       assertPathWithinDir(localTxtPath, invDir);

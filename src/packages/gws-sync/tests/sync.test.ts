@@ -5,10 +5,14 @@ import type { InventoryRow } from '@full-content-inventory/shared';
 // Mock external dependencies BEFORE importing sync.ts
 // ---------------------------------------------------------------------------
 
-vi.mock('@full-content-inventory/shared', () => ({
-  readInventory: vi.fn<() => Promise<InventoryRow[]>>(),
-  writeInventory: vi.fn<() => Promise<void>>(),
-}));
+vi.mock('@full-content-inventory/shared', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@full-content-inventory/shared')>();
+  return {
+    ...actual,
+    readInventory: vi.fn<() => Promise<InventoryRow[]>>(),
+    writeInventory: vi.fn<() => Promise<void>>(),
+  };
+});
 
 vi.mock('../src/drive.js', () => ({
   ensureDriveFolder: vi.fn<() => Promise<string>>(),
@@ -27,7 +31,8 @@ vi.mock('node:fs/promises', () => ({
 // Import after all mocks are registered
 // ---------------------------------------------------------------------------
 
-import { buildFolderTree, parseImageMarkers, sync, urlToTxtPath, assertPathWithinDir } from '../src/sync.js';
+import { buildFolderTree, parseImageMarkers, sync, assertPathWithinDir } from '../src/sync.js';
+import { urlToFilename } from '@full-content-inventory/shared';
 import * as shared from '@full-content-inventory/shared';
 import * as drive from '../src/drive.js';
 
@@ -171,40 +176,40 @@ describe('sync — resume behavior', () => {
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
-// urlToTxtPath — path traversal hardening
+// urlToFilename — path traversal hardening
 // ---------------------------------------------------------------------------
 
-describe('urlToTxtPath', () => {
+describe('urlToFilename', () => {
   it('filters out .. segments', () => {
-    expect(urlToTxtPath('https://evil.com/../../../etc/passwd')).toBe('etc/passwd.txt');
-    expect(urlToTxtPath('https://example.com/a/../b/page.html')).toBe('b/page.txt');
+    expect(urlToFilename('https://evil.com/../../../etc/passwd')).toBe('etc/passwd.txt');
+    expect(urlToFilename('https://example.com/a/../b/page.html')).toBe('b/page.txt');
   });
 
   it('filters out . segments', () => {
-    expect(urlToTxtPath('https://example.com/./page.html')).toBe('page.txt');
-    expect(urlToTxtPath('https://example.com/a/./b/page.html')).toBe('a/b/page.txt');
+    expect(urlToFilename('https://example.com/./page.html')).toBe('page.txt');
+    expect(urlToFilename('https://example.com/a/./b/page.html')).toBe('a/b/page.txt');
   });
 
   it('preserves normal paths unchanged', () => {
-    expect(urlToTxtPath('https://example.com/about.html')).toBe('about.txt');
-    expect(urlToTxtPath('https://example.com/a/b/page.html')).toBe('a/b/page.txt');
+    expect(urlToFilename('https://example.com/about.html')).toBe('about.txt');
+    expect(urlToFilename('https://example.com/a/b/page.html')).toBe('a/b/page.txt');
   });
 
   it('maps root paths to homepage.txt', () => {
-    expect(urlToTxtPath('https://example.com/')).toBe('homepage.txt');
-    expect(urlToTxtPath('https://example.com/index.html')).toBe('homepage.txt');
+    expect(urlToFilename('https://example.com/')).toBe('homepage.txt');
+    expect(urlToFilename('https://example.com/index.html')).toBe('homepage.txt');
   });
 
   it('filters out percent-encoded .. and . segments', () => {
-    expect(urlToTxtPath('https://evil.com/%2e%2e/etc/passwd')).toBe('etc/passwd.txt');
-    expect(urlToTxtPath('https://example.com/a/%2e%2e/b/page.html')).toBe('b/page.txt');
-    expect(urlToTxtPath('https://example.com/%2e/page.html')).toBe('page.txt');
+    expect(urlToFilename('https://evil.com/%2e%2e/etc/passwd')).toBe('etc/passwd.txt');
+    expect(urlToFilename('https://example.com/a/%2e%2e/b/page.html')).toBe('b/page.txt');
+    expect(urlToFilename('https://example.com/%2e/page.html')).toBe('page.txt');
   });
 
   it('filters out double-encoded .. segments', () => {
-    expect(urlToTxtPath('https://evil.com/%252e%252e/etc/passwd')).toBe('etc/passwd.txt');
+    expect(urlToFilename('https://evil.com/%252e%252e/etc/passwd')).toBe('etc/passwd.txt');
     // When .. is between segments, it is removed (not resolved), so a/..  →  a
-    expect(urlToTxtPath('https://example.com/a/%252e%252e/b/page.html')).toBe('a/b/page.txt');
+    expect(urlToFilename('https://example.com/a/%252e%252e/b/page.html')).toBe('a/b/page.txt');
   });
 });
 

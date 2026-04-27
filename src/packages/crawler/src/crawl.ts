@@ -7,7 +7,6 @@
 
 import { join, relative } from "node:path";
 import { existsSync } from "node:fs";
-import unidecode from "unidecode";
 
 import { downloadPage, type DownloadOptions } from "./download.js";
 import { extractMeta, type PageMeta } from "./meta.js";
@@ -19,9 +18,10 @@ import {
   upsertRow,
   readInventory,
   writeInventory,
+  ensureDirForFile,
+  urlToFilename,
   type InventoryRow,
 } from "@full-content-inventory/shared";
-import { ensureDirForFile } from "@full-content-inventory/shared";
 
 // ---------------------------------------------------------------------------
 // Options
@@ -46,65 +46,6 @@ export interface CrawlOptions {
   delay?: number;
   /** Crawl mode */
   mode: "domain" | "folder" | "page" | "list";
-}
-
-// ---------------------------------------------------------------------------
-// URL → safe filename
-// ---------------------------------------------------------------------------
-
-/**
- * Convert a URL to a safe relative path (not a flat filename).
- * Strips protocol, query, fragment, and converts path segments to safe ASCII.
- *
- * @param url  The full URL to convert.
- * @returns    A safe relative path with real directory separators.
- *             Root paths (/, /index.html, /index) map to "homepage.txt".
- */
-export function urlToFilename(url: string): string {
-  try {
-    const { pathname } = new URL(url);
-    const decoded = unidecode(pathname);
-
-    // Normalize common index variants
-    if (pathname === "/" || pathname === "/index.html" || pathname === "/index") {
-      return "homepage.txt";
-    }
-
-    // Strip leading slash and normalize path
-    const normalizedPath = decoded
-      .replace(/^\//, "")  // strip leading slash
-      .replace(/\/index$/, "");  // strip trailing /index
-
-    // Split into segments
-    const segments = normalizedPath.split("/").filter(Boolean);
-
-    // For the last segment (filename), strip known web extensions
-    // before sanitization so dots in the middle are preserved correctly
-    const lastIdx = segments.length - 1;
-    if (lastIdx >= 0) {
-      segments[lastIdx] = segments[lastIdx]
-        .replace(/\.(html?|php|aspx)$/i, "");
-    }
-
-    // Sanitize each segment: replace invalid chars with hyphens
-    const safeSegments = segments.map((seg) =>
-      seg
-        .replace(/[^a-zA-Z0-9_\-.]/g, "-")
-        .replace(/-+/g, "-")
-        .replace(/^-|-$/g, "")
-    );
-
-    // Rejoin with real directory separators
-    return safeSegments.join("/") + ".txt";
-  } catch {
-    // Fallback for invalid URLs
-    const safe = unidecode(url)
-      .replace(/[^a-zA-Z0-9]/g, "-")
-      .replace(/-+/g, "-")
-      .replace(/^-|-$/g, "")
-      || "unknown";
-    return safe + ".txt";
-  }
 }
 
 // ---------------------------------------------------------------------------

@@ -33,6 +33,5 @@ export {
 export {
   crawl,
   processPage,
-  urlToFilename,
   type CrawlOptions,
 } from "./crawl.js";
