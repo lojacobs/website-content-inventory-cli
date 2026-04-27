@@ -13,7 +13,8 @@
   },
   "scripts": {
     "build": "tsc --build",
-    "clean": "rm -rf dist tsconfig.tsbuildinfo"
+    "clean": "rm -rf dist tsconfig.tsbuildinfo",
+    "test": "vitest run"
   },
   "dependencies": {
     "csv-parse": "^6.2.1",
@@ -22,6 +23,7 @@
   },
   "devDependencies": {
     "@types/node": "^25.6.0",
-    "typescript": "^5.4.0"
+    "typescript": "^5.4.0",
+    "vitest": "*"
   }
 }

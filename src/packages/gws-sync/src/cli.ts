@@ -22,7 +22,7 @@ program.action(async (options) => {
     await sync(config);
     process.exit(0);
   } catch (err) {
-    console.error((err as Error).message ?? err);
+    console.error(err instanceof Error ? err.message : String(err));
     process.exit(1);
   }
 });

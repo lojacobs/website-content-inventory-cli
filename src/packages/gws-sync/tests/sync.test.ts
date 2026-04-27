@@ -14,11 +14,27 @@ vi.mock('@full-content-inventory/shared', async (importOriginal) => {
   };
 });
 
-vi.mock('../src/drive.js', () => ({
-  ensureDriveFolder: vi.fn<() => Promise<string>>(),
-  uploadAsDoc: vi.fn<() => Promise<string>>(),
-  uploadAsSheet: vi.fn<() => Promise<string>>(),
-  updateSheet: vi.fn<() => Promise<void>>(),
+vi.mock('../src/drive.js', async () => {
+  // Keep SheetNotFoundError as the real class so `instanceof` checks work in sync.ts.
+  class SheetNotFoundError extends Error {
+    code = 'SHEET_NOT_FOUND' as const;
+    constructor(message: string) {
+      super(message);
+      this.name = 'SheetNotFoundError';
+    }
+  }
+  return {
+    ensureDriveFolder: vi.fn<() => Promise<string>>(),
+    uploadAsDoc: vi.fn<() => Promise<string>>(),
+    uploadAsBinary: vi.fn<() => Promise<string>>(),
+    uploadAsSheet: vi.fn<() => Promise<string>>(),
+    updateSheet: vi.fn<() => Promise<void>>(),
+    SheetNotFoundError,
+  };
+});
+
+vi.mock('../src/fetchOrigin.js', () => ({
+  fetchToTemp: vi.fn<() => Promise<{ tempPath: string; cleanup: () => Promise<void> }>>(),
 }));
 
 // Mock node:fs/promises for .sync-meta.json reads/writes.
@@ -35,6 +51,23 @@ import { buildFolderTree, parseImageMarkers, sync, assertPathWithinDir } from '.
 import { urlToFilename } from '@full-content-inventory/shared';
 import * as shared from '@full-content-inventory/shared';
 import * as drive from '../src/drive.js';
+import * as fetchOrigin from '../src/fetchOrigin.js';
+
+/**
+ * Returns a fs.readFile mock implementation that:
+ * - Returns ENOENT for any `.sync-meta.json` path (so sync() falls into "no
+ *   prior meta" branch and uploads a new sheet).
+ * - Returns `txtContent` for everything else (the per-row .txt reads).
+ */
+function readFileImpl(txtContent: string) {
+  return (path: unknown) => {
+    if (typeof path === 'string' && path.endsWith('.sync-meta.json')) {
+      const err = Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+      return Promise.reject(err);
+    }
+    return Promise.resolve(txtContent);
+  };
+}
 
 // ---------------------------------------------------------------------------
 // buildFolderTree
@@ -138,7 +171,7 @@ describe('sync — resume behavior', () => {
     vi.mocked(shared.readInventory).mockResolvedValue(rows);
 
     const fs = await import('node:fs/promises');
-    vi.mocked(fs.readFile).mockResolvedValue('content with no images' as never);
+    vi.mocked(fs.readFile).mockImplementation(readFileImpl('content with no images') as never);
 
     await sync({
       inventoryPath: '/tmp/test.csv',
@@ -158,7 +191,7 @@ describe('sync — resume behavior', () => {
     vi.mocked(shared.readInventory).mockResolvedValue(rows);
 
     const fs = await import('node:fs/promises');
-    vi.mocked(fs.readFile).mockResolvedValue('content' as never);
+    vi.mocked(fs.readFile).mockImplementation(readFileImpl('content') as never);
 
     await sync({
       inventoryPath: '/tmp/test.csv',
@@ -168,6 +201,135 @@ describe('sync — resume behavior', () => {
 
     // Both rows should be processed (resume=false ignores sync_status).
     expect(drive.uploadAsDoc).toHaveBeenCalledTimes(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// sync — binary asset handling
+// ---------------------------------------------------------------------------
+
+describe('sync — binary asset handling', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(shared.readInventory).mockResolvedValue([]);
+    vi.mocked(shared.writeInventory).mockResolvedValue();
+    vi.mocked(drive.ensureDriveFolder).mockResolvedValue('folder-id');
+    vi.mocked(drive.uploadAsDoc).mockResolvedValue('doc-id');
+    vi.mocked(drive.uploadAsBinary).mockResolvedValue('file-id');
+    vi.mocked(drive.uploadAsSheet).mockResolvedValue('sheet-id');
+    vi.mocked(drive.updateSheet).mockResolvedValue();
+    vi.mocked(fetchOrigin.fetchToTemp).mockResolvedValue({
+      tempPath: '/tmp/fci-sync-abc/report.pdf',
+      cleanup: vi.fn().mockResolvedValue(),
+    });
+  });
+
+  it('processes a PDF row via fetchToTemp + uploadAsBinary (no local .txt read)', async () => {
+    const rows: InventoryRow[] = [
+      { URL: 'https://example.com/a/report.pdf', crawl_status: 'done' } as InventoryRow,
+    ];
+    vi.mocked(shared.readInventory).mockResolvedValue(rows);
+
+    await sync({
+      inventoryPath: '/tmp/test.csv',
+      driveFolderId: 'folder-1',
+    });
+
+    // Should NOT read a local .txt (no fs.readFile for row content).
+    expect(drive.uploadAsDoc).not.toHaveBeenCalled();
+
+    // Should fetch from origin and upload as binary.
+    expect(fetchOrigin.fetchToTemp).toHaveBeenCalledTimes(1);
+    expect(fetchOrigin.fetchToTemp).toHaveBeenCalledWith('https://example.com/a/report.pdf');
+
+    expect(drive.uploadAsBinary).toHaveBeenCalledTimes(1);
+    expect(drive.uploadAsBinary).toHaveBeenCalledWith(
+      '/tmp/fci-sync-abc/report.pdf',
+      'folder-id',
+      'application/pdf',
+      'report.pdf',
+    );
+
+    // Row updated.
+    const writtenRows = vi.mocked(shared.writeInventory).mock.calls.at(-1)?.[1] as InventoryRow[];
+    expect(writtenRows[0].sync_status).toBe('done');
+    expect(writtenRows[0].Lien_Google_Doc).toBe('file-id');
+  });
+
+  it('processes an HTML row via the existing local .txt path', async () => {
+    const rows: InventoryRow[] = [
+      { URL: 'https://example.com/a/page.html', crawl_status: 'done' } as InventoryRow,
+    ];
+    vi.mocked(shared.readInventory).mockResolvedValue(rows);
+
+    const fs = await import('node:fs/promises');
+    vi.mocked(fs.readFile).mockImplementation(readFileImpl('content with no images') as never);
+
+    await sync({
+      inventoryPath: '/tmp/test.csv',
+      driveFolderId: 'folder-1',
+    });
+
+    expect(fetchOrigin.fetchToTemp).not.toHaveBeenCalled();
+    expect(drive.uploadAsBinary).not.toHaveBeenCalled();
+    expect(drive.uploadAsDoc).toHaveBeenCalledTimes(1);
+
+    const writtenRows = vi.mocked(shared.writeInventory).mock.calls.at(-1)?.[1] as InventoryRow[];
+    expect(writtenRows[0].sync_status).toBe('done');
+    expect(writtenRows[0].Lien_Google_Doc).toBe('doc-id');
+  });
+
+  it('sets sync_status=error when fetchToTemp fails, then continues', async () => {
+    const rows: InventoryRow[] = [
+      { URL: 'https://example.com/a/missing.pdf', crawl_status: 'done' } as InventoryRow,
+      { URL: 'https://example.com/a/page.html', crawl_status: 'done' } as InventoryRow,
+    ];
+    vi.mocked(shared.readInventory).mockResolvedValue(rows);
+
+    // First row fails fetch; second row is HTML (no fetch).
+    vi.mocked(fetchOrigin.fetchToTemp).mockRejectedValueOnce(
+      new Error('ECONNREFUSED'),
+    );
+
+    const fs = await import('node:fs/promises');
+    vi.mocked(fs.readFile).mockImplementation(readFileImpl('content') as never);
+
+    await sync({
+      inventoryPath: '/tmp/test.csv',
+      driveFolderId: 'folder-1',
+    });
+
+    // fetchToTemp called once (only for the PDF row; HTML row uses local .txt).
+    expect(fetchOrigin.fetchToTemp).toHaveBeenCalledTimes(1);
+
+    // First row error, second row done.
+    const writtenRows = vi.mocked(shared.writeInventory).mock.calls.at(-1)?.[1] as InventoryRow[];
+    expect(writtenRows[0].sync_status).toBe('error');
+    expect(writtenRows[1].sync_status).toBe('done');
+  });
+
+  it('cleans up the temp file even when uploadAsBinary throws', async () => {
+    const rows: InventoryRow[] = [
+      { URL: 'https://example.com/a/report.pdf', crawl_status: 'done' } as InventoryRow,
+    ];
+    vi.mocked(shared.readInventory).mockResolvedValue(rows);
+
+    const cleanupSpy = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(fetchOrigin.fetchToTemp).mockReset();
+    vi.mocked(fetchOrigin.fetchToTemp).mockResolvedValue({
+      tempPath: '/tmp/fci-sync-abc/report.pdf',
+      cleanup: cleanupSpy,
+    });
+    vi.mocked(drive.uploadAsBinary).mockRejectedValue(new Error('quota exceeded'));
+
+    await sync({
+      inventoryPath: '/tmp/test.csv',
+      driveFolderId: 'folder-1',
+    });
+
+    expect(cleanupSpy).toHaveBeenCalledTimes(1);
+    const writtenRows = vi.mocked(shared.writeInventory).mock.calls.at(-1)?.[1] as InventoryRow[];
+    expect(writtenRows[0].sync_status).toBe('error');
   });
 });
 
@@ -254,7 +416,7 @@ describe('sync — path traversal guard', () => {
     vi.mocked(shared.readInventory).mockResolvedValue(rows);
 
     const fs = await import('node:fs/promises');
-    vi.mocked(fs.readFile).mockResolvedValue('safe content' as never);
+    vi.mocked(fs.readFile).mockImplementation(readFileImpl('safe content') as never);
 
     await sync({
       inventoryPath: '/tmp/inventory/_inventory.csv',
@@ -288,7 +450,7 @@ describe('sync — error isolation', () => {
     vi.mocked(shared.readInventory).mockResolvedValue(rows);
 
     const fs = await import('node:fs/promises');
-    vi.mocked(fs.readFile).mockResolvedValue('content' as never);
+    vi.mocked(fs.readFile).mockImplementation(readFileImpl('content') as never);
 
     // Fail on the first call to uploadAsDoc, succeed on the second.
     vi.mocked(drive.uploadAsDoc)
@@ -313,6 +475,26 @@ describe('sync — error isolation', () => {
     expect(writtenRows[1].sync_status).toBe('done');
   });
 
+  it('does not process rows whose crawl_status is empty (FR-2)', async () => {
+    const rows: InventoryRow[] = [
+      { URL: 'https://example.com/a/done.html', crawl_status: 'done' } as InventoryRow,
+      { URL: 'https://example.com/a/empty.html', crawl_status: '' } as InventoryRow,
+      { URL: 'https://example.com/a/missing.html' } as InventoryRow,
+    ];
+    vi.mocked(shared.readInventory).mockResolvedValue(rows);
+
+    const fs = await import('node:fs/promises');
+    vi.mocked(fs.readFile).mockImplementation(readFileImpl('content') as never);
+
+    await sync({
+      inventoryPath: '/tmp/test.csv',
+      driveFolderId: 'folder-1',
+    });
+
+    // Only the crawl_status='done' row gets uploaded.
+    expect(drive.uploadAsDoc).toHaveBeenCalledTimes(1);
+  });
+
   it('does not crash when every row fails', async () => {
     const rows: InventoryRow[] = [
       { URL: 'https://example.com/a/page1.html', crawl_status: 'done' } as InventoryRow,
@@ -320,7 +502,7 @@ describe('sync — error isolation', () => {
     vi.mocked(shared.readInventory).mockResolvedValue(rows);
 
     const fs = await import('node:fs/promises');
-    vi.mocked(fs.readFile).mockResolvedValue('content' as never);
+    vi.mocked(fs.readFile).mockImplementation(readFileImpl('content') as never);
 
     vi.mocked(drive.uploadAsDoc).mockRejectedValue(new Error('upload failed'));
 
@@ -328,5 +510,98 @@ describe('sync — error isolation', () => {
     await expect(
       sync({ inventoryPath: '/tmp/test.csv', driveFolderId: 'folder-1' })
     ).resolves.not.toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// sync — .sync-meta.json handling
+// ---------------------------------------------------------------------------
+
+describe('sync — .sync-meta.json handling', () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    vi.mocked(shared.readInventory).mockResolvedValue([]);
+    vi.mocked(shared.writeInventory).mockResolvedValue();
+    vi.mocked(drive.ensureDriveFolder).mockResolvedValue('folder-id');
+    vi.mocked(drive.uploadAsDoc).mockResolvedValue('doc-id');
+    vi.mocked(drive.uploadAsSheet).mockResolvedValue('sheet-new');
+    vi.mocked(drive.updateSheet).mockResolvedValue();
+
+    const fs = await import('node:fs/promises');
+    vi.mocked(fs.writeFile).mockResolvedValue();
+  });
+
+  it('treats ENOENT on .sync-meta.json as "no meta" and creates a new sheet', async () => {
+    const fs = await import('node:fs/promises');
+    const enoent = Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+    vi.mocked(fs.readFile).mockRejectedValue(enoent);
+
+    await sync({
+      inventoryPath: '/tmp/test.csv',
+      driveFolderId: 'folder-1',
+    });
+
+    expect(drive.uploadAsSheet).toHaveBeenCalledTimes(1);
+    expect(drive.updateSheet).not.toHaveBeenCalled();
+  });
+
+  it('rethrows non-ENOENT errors from reading .sync-meta.json', async () => {
+    const fs = await import('node:fs/promises');
+    const eacces = Object.assign(new Error('EACCES'), { code: 'EACCES' });
+    vi.mocked(fs.readFile).mockRejectedValue(eacces);
+
+    await expect(
+      sync({ inventoryPath: '/tmp/test.csv', driveFolderId: 'folder-1' })
+    ).rejects.toThrow('EACCES');
+  });
+
+  it('rethrows a wrapped error when .sync-meta.json contains invalid JSON', async () => {
+    const fs = await import('node:fs/promises');
+    vi.mocked(fs.readFile).mockResolvedValue('{not json' as never);
+
+    await expect(
+      sync({ inventoryPath: '/tmp/test.csv', driveFolderId: 'folder-1' })
+    ).rejects.toThrow(/Failed to parse/);
+  });
+
+  it('falls back to uploadAsSheet when updateSheet throws SheetNotFoundError', async () => {
+    const fs = await import('node:fs/promises');
+    vi.mocked(fs.readFile).mockResolvedValue(
+      JSON.stringify({ sheetsId: 'stale-sheet-id' }) as never,
+    );
+
+    vi.mocked(drive.updateSheet).mockRejectedValueOnce(
+      new drive.SheetNotFoundError('sheet stale-sheet-id not found'),
+    );
+    vi.mocked(drive.uploadAsSheet).mockResolvedValueOnce('fresh-sheet-id');
+
+    await sync({
+      inventoryPath: '/tmp/test.csv',
+      driveFolderId: 'folder-1',
+    });
+
+    expect(drive.updateSheet).toHaveBeenCalledTimes(1);
+    expect(drive.uploadAsSheet).toHaveBeenCalledTimes(1);
+
+    // The fresh id should have been written to .sync-meta.json.
+    const writeCall = vi.mocked(fs.writeFile).mock.calls.at(-1);
+    expect(writeCall).toBeDefined();
+    const written = JSON.parse(writeCall![1] as string) as { sheetsId: string };
+    expect(written.sheetsId).toBe('fresh-sheet-id');
+  });
+
+  it('rethrows other errors from updateSheet (no fallback)', async () => {
+    const fs = await import('node:fs/promises');
+    vi.mocked(fs.readFile).mockResolvedValue(
+      JSON.stringify({ sheetsId: 'sheet-id' }) as never,
+    );
+
+    vi.mocked(drive.updateSheet).mockRejectedValueOnce(new Error('quota exceeded'));
+
+    await expect(
+      sync({ inventoryPath: '/tmp/test.csv', driveFolderId: 'folder-1' })
+    ).rejects.toThrow('quota exceeded');
+
+    expect(drive.uploadAsSheet).not.toHaveBeenCalled();
   });
 });

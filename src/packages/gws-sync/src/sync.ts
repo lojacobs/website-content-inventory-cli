@@ -2,11 +2,12 @@
  * gws-sync — main orchestrator: build folder trees, parse image markers, sync to Drive.
  */
 
-import { readInventory, writeInventory, type InventoryRow, urlToFilename } from '@full-content-inventory/shared';
+import { readInventory, writeInventory, type InventoryRow, urlToFilename, isBinaryAsset } from '@full-content-inventory/shared';
 import type { FolderNode, ImageMarker, SyncConfig, SyncMeta } from './types.js';
-import { ensureDriveFolder, uploadAsDoc, uploadAsSheet, updateSheet } from './drive.js';
+import { ensureDriveFolder, uploadAsDoc, uploadAsBinary, uploadAsSheet, updateSheet, SheetNotFoundError } from './drive.js';
+import { fetchToTemp } from './fetchOrigin.js';
 import { readFile, writeFile } from 'node:fs/promises';
-import { resolve, dirname } from 'node:path';
+import { resolve, dirname, basename } from 'node:path';
 
 // ---------------------------------------------------------------------------
 // Path-traversal guard
@@ -57,7 +58,7 @@ export function buildFolderTree(rows: InventoryRow[]): FolderNode[] {
     try {
       urlPathname = new URL(row.URL).pathname;
     } catch {
-      // Skip rows with invalid URLs
+      console.warn(`buildFolderTree: skipping invalid URL: ${row.URL}`);
       continue;
     }
 
@@ -152,8 +153,10 @@ export async function sync(config: SyncConfig): Promise<void> {
   // Step 1: Read inventory
   const allRows = await readInventory(inventoryPath);
 
-  // Step 2: Filter to rows where crawl_status === 'done'
-  const crawledRows = allRows.filter((row) => row.crawl_status === 'done' || !row.crawl_status);
+  // Step 2: Filter to rows where crawl_status === 'done' (per specs.md FR-2).
+  // Empty/missing crawl_status means "not yet crawled" and must be skipped —
+  // their .txt files do not exist on disk.
+  const crawledRows = allRows.filter((row) => row.crawl_status === 'done');
 
   // Step 3: If resume is true (default), skip rows where sync_status === 'done'
   const rowsToProcess = resume
@@ -204,8 +207,10 @@ export async function sync(config: SyncConfig): Promise<void> {
         }
       }
 
+      console.warn(`getDriveFolderId: no mapped Drive folder for ${row.URL}; using root`);
       return driveFolderId;
     } catch {
+      console.warn(`getDriveFolderId: invalid URL ${row.URL}; using root`);
       return driveFolderId;
     }
   }
@@ -215,30 +220,50 @@ export async function sync(config: SyncConfig): Promise<void> {
 
   for (const row of rowsToProcess) {
     try {
-      // Determine local .txt file path
-      const localTxtPath = resolve(invDir, urlToFilename(row.URL));
-
-      // Path-traversal guard
-      assertPathWithinDir(localTxtPath, invDir);
-
-      // Read .txt content
-      const content = await readFile(localTxtPath, 'utf-8');
-
-      // Parse image markers
-      const markers = parseImageMarkers(content);
-
       // Get Drive folder ID for this row
       const rowDriveFolderId = getDriveFolderId(row);
 
-      // Upload as Google Doc
-      const docId = await uploadAsDoc(localTxtPath, rowDriveFolderId);
+      const asset = isBinaryAsset(row.URL);
+      let docOrFileId: string;
 
-      // Replace images (no-op stub)
-      await replaceImagesInDoc(docId, markers);
+      if (asset.isBinary) {
+        const fetched = await fetchToTemp(row.URL);
+        try {
+          const rawName = basename(new URL(row.URL).pathname);
+          let driveName: string;
+          try { driveName = decodeURIComponent(rawName); } catch { driveName = rawName; }
+          docOrFileId = await uploadAsBinary(
+            fetched.tempPath,
+            rowDriveFolderId,
+            asset.mimeType!,
+            driveName,
+          );
+        } finally {
+          await fetched.cleanup();
+        }
+      } else {
+        // Determine local .txt file path
+        const localTxtPath = resolve(invDir, urlToFilename(row.URL));
+
+        // Path-traversal guard
+        assertPathWithinDir(localTxtPath, invDir);
+
+        // Read .txt content
+        const content = await readFile(localTxtPath, 'utf-8');
+
+        // Parse image markers
+        const markers = parseImageMarkers(content);
+
+        // Upload as Google Doc
+        docOrFileId = await uploadAsDoc(localTxtPath, rowDriveFolderId);
+
+        // Replace images (no-op stub)
+        await replaceImagesInDoc(docOrFileId, markers);
+      }
 
       // Update row status
       row.sync_status = 'done';
-      row.Lien_Google_Doc = docId;
+      row.Lien_Google_Doc = docOrFileId;
     } catch (err) {
       // On error: set sync_status = 'error' and continue
       row.sync_status = 'error';
@@ -256,18 +281,40 @@ export async function sync(config: SyncConfig): Promise<void> {
   try {
     const metaContent = await readFile(syncMetaPath, 'utf-8');
     syncMeta = JSON.parse(metaContent) as SyncMeta;
-  } catch {
-    syncMeta = {};
+  } catch (err) {
+    // Only swallow "file does not exist" — surface anything else (permissions,
+    // corrupted JSON, …) so the caller can react.
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === 'ENOENT') {
+      syncMeta = {};
+    } else if (err instanceof SyntaxError) {
+      throw new Error(
+        `Failed to parse ${syncMetaPath}: ${err.message}. Delete or fix the file to continue.`,
+      );
+    } else {
+      throw err;
+    }
   }
 
   let finalSheetsId: string;
 
   if (syncMeta.sheetsId) {
-    // Update existing sheet
-    await updateSheet(inventoryPath, syncMeta.sheetsId);
-    finalSheetsId = syncMeta.sheetsId;
+    try {
+      await updateSheet(inventoryPath, syncMeta.sheetsId);
+      finalSheetsId = syncMeta.sheetsId;
+    } catch (err) {
+      // If the recorded sheet was deleted in Drive, fall back to a fresh upload
+      // so subsequent runs converge instead of failing forever.
+      if (err instanceof SheetNotFoundError) {
+        console.warn(
+          `Recorded sheetsId ${syncMeta.sheetsId} no longer exists in Drive; uploading a new sheet.`,
+        );
+        finalSheetsId = await uploadAsSheet(inventoryPath, driveFolderId);
+      } else {
+        throw err;
+      }
+    }
   } else {
-    // Upload as new sheet
     finalSheetsId = await uploadAsSheet(inventoryPath, driveFolderId);
   }
 
