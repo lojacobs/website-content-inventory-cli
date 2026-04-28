@@ -16,14 +16,19 @@
   },
   "scripts": {
     "build": "tsc --build",
-    "clean": "rm -rf dist tsconfig.tsbuildinfo"
+    "clean": "rm -rf dist tsconfig.tsbuildinfo",
+    "test": "vitest run"
   },
   "dependencies": {
     "@full-content-inventory/crawler": "workspace:*",
     "@full-content-inventory/shared": "workspace:*",
-    "@full-content-inventory/ai-summarizer": "workspace:*"
+    "@full-content-inventory/ai-summarizer": "workspace:*",
+    "@full-content-inventory/gws-sync": "workspace:*",
+    "commander": "*"
   },
   "devDependencies": {
-    "typescript": "^5.4.0"
+    "@types/node": "^25.6.0",
+    "typescript": "^5.4.0",
+    "vitest": "*"
   }
 }

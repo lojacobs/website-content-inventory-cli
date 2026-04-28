@@ -48,13 +48,25 @@ importers:
       '@full-content-inventory/crawler':
         specifier: workspace:*
         version: link:../crawler
+      '@full-content-inventory/gws-sync':
+        specifier: workspace:*
+        version: link:../gws-sync
       '@full-content-inventory/shared':
         specifier: workspace:*
         version: link:../shared
+      commander:
+        specifier: '*'
+        version: 14.0.3
     devDependencies:
+      '@types/node':
+        specifier: ^25.6.0
+        version: 25.6.0
       typescript:
         specifier: ^5.4.0
         version: 5.9.3
+      vitest:
+        specifier: '*'
+        version: 4.1.5(@types/node@25.6.0)(vite@8.0.10(@types/node@25.6.0)(yaml@2.8.3))
 
   packages/crawler:
     dependencies:
