@@ -1,6 +1,4 @@
 {
-  "providers": [
-    { "id": "opencode-go", "models": ["minimax-m2.5", "claude-haiku-4-5"] },
-    { "id": "openai",      "models": ["gpt-4o-mini"] }
-  ]
+  "opencode-go": { "type": "api_key", "key": "sk-XXX" },
+  "openai": { "type": "api_key", "key": "sk-YYY" }
 }

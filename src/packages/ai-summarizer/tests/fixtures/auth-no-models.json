@@ -1,5 +1,3 @@
 {
-  "providers": [
-    { "id": "opencode-go" }
-  ]
+  "opencode-go": { "type": "api_key", "key": "sk-XXX" }
 }

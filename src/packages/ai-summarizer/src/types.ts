@@ -9,10 +9,7 @@ export interface RunOptions {
   modelId: string;
 }
 
-/** Shape of ~/.pi/agent/auth.json — read-only. */
+/** Shape of ~/.pi/agent/auth.json — read-only. Flat object keyed by provider name. */
 export interface AuthJson {
-  providers?: Array<{
-    id: string;
-    models?: string[];
-  }>;
+  [provider: string]: unknown;
 }
