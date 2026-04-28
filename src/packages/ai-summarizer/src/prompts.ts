@@ -33,7 +33,7 @@ ${PAGE_TYPE_BULLETS}
 
 Respond with ONLY the page type label, no explanation, no punctuation.`;
 
-export const SUMMARY_SYSTEM_PROMPT = `You are a content summarizer. Given the content of a web page, write a summary in the same language as the page content. The summary must be 200 characters or fewer. It must be a complete sentence — do not output a partial sentence or a fragment with just a subject and a verb. Be factual and neutral. Do not start with "This page" or "The page". Respond with ONLY the summary text.`;
+export const SUMMARY_SYSTEM_PROMPT = `You are a content summarizer. Given the content of a web page, write a summary in the same language as the page content. The summary must be 200 characters or fewer. It must be a complete sentence — do not output a partial sentence or a fragment with just a subject and a verb. Read only the first 2 paragraphs of the page to form your summary; ignore the rest. Be factual and neutral. Do not start with "This page" or "The page". Respond with ONLY the summary text.`;
 
 const MAX_BODY_CHARS = 2000;
 
