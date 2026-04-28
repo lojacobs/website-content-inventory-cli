@@ -39,8 +39,14 @@ pnpm -r run build
 
 The CLI is available at:
 ```bash
-node src/packages/crawler/dist/cli.js --help
+fci-crawl --help
 ```
+
+> Run from the `src/` directory after `pnpm install`:
+> ```bash
+> cd src
+> pnpm exec fci-crawl --help
+> ```
 
 ---
 
@@ -48,7 +54,7 @@ node src/packages/crawler/dist/cli.js --help
 
 ### Crawl a single URL
 ```bash
-node src/packages/crawler/dist/cli.js \
+fci-crawl \
   --url https://example.com \
   --client myclient \
   --project myproject
@@ -56,7 +62,7 @@ node src/packages/crawler/dist/cli.js \
 
 ### Crawl a list of URLs from a file
 ```bash
-node src/packages/crawler/dist/cli.js \
+fci-crawl \
   --urls-file urls.txt \
   --client myclient \
   --project myproject
@@ -64,7 +70,7 @@ node src/packages/crawler/dist/cli.js \
 
 ### Domain crawl (discover all pages via sitemap + BFS)
 ```bash
-node src/packages/crawler/dist/cli.js \
+fci-crawl \
   --url https://example.com \
   --client myclient \
   --project myproject \
@@ -74,7 +80,7 @@ node src/packages/crawler/dist/cli.js \
 
 ### Force re-crawl (ignore resume)
 ```bash
-node src/packages/crawler/dist/cli.js \
+fci-crawl \
   --url https://example.com \
   --client myclient \
   --project myproject \

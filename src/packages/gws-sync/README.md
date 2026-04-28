@@ -39,8 +39,14 @@ pnpm -r run build
 
 The CLI is available at:
 ```bash
-node src/packages/gws-sync/dist/cli.js --help
+fci-sync --help
 ```
+
+> Run from the `src/` directory after `pnpm install`:
+> ```bash
+> cd src
+> pnpm exec fci-sync --help
+> ```
 
 ---
 
@@ -48,14 +54,14 @@ node src/packages/gws-sync/dist/cli.js --help
 
 ### Basic sync (resume mode — skips rows already `sync_status=done`)
 ```bash
-node src/packages/gws-sync/dist/cli.js \
+fci-sync \
   --inventory /path/to/output/client_project/example.com/_inventory.csv \
   --folder-id 1aBcD1234...
 ```
 
 ### Force re-sync of all rows
 ```bash
-node src/packages/gws-sync/dist/cli.js \
+fci-sync \
   --inventory /path/to/output/client_project/example.com/_inventory.csv \
   --folder-id 1aBcD1234... \
   --no-resume

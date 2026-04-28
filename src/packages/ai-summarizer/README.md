@@ -46,13 +46,14 @@ pnpm -r run build
 
 The CLI is available at:
 ```bash
-node src/packages/ai-summarizer/dist/cli.js --help
-```
-
-Or, after `pnpm install`, via the bin symlink (if your package manager supports it):
-```bash
 fci-summarize --help
 ```
+
+> Run from the `src/` directory after `pnpm install`:
+> ```bash
+> cd src
+> pnpm exec fci-summarize --help
+> ```
 
 ---
 
@@ -60,7 +61,7 @@ fci-summarize --help
 
 ### Basic run (resume mode — skips rows already marked `ai_status=done`)
 ```bash
-node src/packages/ai-summarizer/dist/cli.js \
+fci-summarize \
   --inventory /path/to/output/client_project/example.com/_inventory.csv \
   --provider opencode-go \
   --model minimax-m2.5
@@ -68,7 +69,7 @@ node src/packages/ai-summarizer/dist/cli.js \
 
 ### Force re-processing of all rows
 ```bash
-node src/packages/ai-summarizer/dist/cli.js \
+fci-summarize \
   --inventory /path/to/output/client_project/example.com/_inventory.csv \
   --provider opencode-go \
   --model minimax-m2.5 \

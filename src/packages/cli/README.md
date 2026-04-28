@@ -33,13 +33,14 @@ pnpm -r run build
 
 The CLI is available at:
 ```bash
-node src/packages/cli/dist/index.js --help
-```
-
-Or via the bin symlink:
-```bash
 inventory --help
 ```
+
+> Run from the `src/` directory after `pnpm install`:
+> ```bash
+> cd src
+> pnpm exec inventory --help
+> ```
 
 ---
 
@@ -116,8 +117,8 @@ This CLI delegates to the individual packages. For stage-specific issues, refer 
 - **Summarize errors** → `@full-content-inventory/ai-summarizer` README
 
 ### `inventory: command not found`
-**Cause:** The package isn't linked globally.  
-**Fix:** Use the full path: `node src/packages/cli/dist/index.js`.
+**Cause:** The package isn't linked globally or you're not in the `src/` directory.  
+**Fix:** Run from `src/` with `pnpm exec inventory --help`.
 
 ### Stage fails but others continue
 **Cause:** The CLI catches stage errors and continues to the next stage.  

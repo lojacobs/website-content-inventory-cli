@@ -76,7 +76,7 @@ pnpm -r run test
 
 ### 1. Crawl a website
 ```bash
-node src/packages/crawler/dist/cli.js \
+fci-crawl \
   --url https://example.com \
   --client myclient \
   --project myproject \
@@ -96,7 +96,7 @@ output/myclient_myproject/example.com/
 
 ### 2. AI-summarize
 ```bash
-node src/packages/ai-summarizer/dist/cli.js \
+fci-summarize \
   --inventory output/myclient_myproject/example.com/_inventory.csv \
   --provider opencode-go \
   --model minimax-m2.5
@@ -104,14 +104,14 @@ node src/packages/ai-summarizer/dist/cli.js \
 
 ### 3. Sync to Google Drive (with AI-enriched inventory)
 ```bash
-node src/packages/gws-sync/dist/cli.js \
+fci-sync \
   --inventory output/myclient_myproject/example.com/_inventory.csv \
   --folder-id 1aBcD1234...
 ```
 
 ### Or run the full pipeline via the unified CLI
 ```bash
-node src/packages/cli/dist/index.js \
+inventory \
   --url https://example.com \
   --client myclient \
   --project myproject \
