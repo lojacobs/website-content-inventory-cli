@@ -46,6 +46,7 @@
 - No `eval()` or `child_process` usage.
 - `commander` parses CLI arguments safely (no shell injection).
 - `auth.json` is read-only; error messages never emit the file content.
+- Model is NOT validated against auth.json — the Pi SDK resolves it at runtime. Provider existence only is checked.
 **Disposition:** Planner review — LOW findings may be accepted as acceptable risk given current threat model (crawled content is user-controlled input; CSV is a local artifact). INFO findings are hardening opportunities.
 
 <!-- Template for each review:
