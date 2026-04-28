@@ -1,17 +1,17 @@
 # `@full-content-inventory/cli`
 
-Unified command-line interface that orchestrates the Full Content Inventory pipeline: crawl → sync → summarize, or any subset.
+Unified command-line interface that orchestrates the Full Content Inventory pipeline: **crawl → ai-summarize → gws-sync**, or any subset.
 
 ---
 
 ## What it does
 
-The main CLI provides a **single entry point** for the entire pipeline. Instead of running `fci-crawl`, `fci-sync`, and `fci-summarize` separately, you can run them in sequence or individually through this unified interface.
+The main CLI provides a **single entry point** for the entire pipeline. Instead of running `fci-crawl`, `fci-summarize`, and `fci-sync` separately, you can run them in sequence or individually through this unified interface.
 
 It depends on:
 - `@full-content-inventory/crawler` — for downloading and text extraction
-- `@full-content-inventory/gws-sync` — for Google Drive upload
 - `@full-content-inventory/ai-summarizer` — for AI classification and summarization
+- `@full-content-inventory/gws-sync` — for Google Drive upload
 - `@full-content-inventory/shared` — for types and utilities
 
 ---
@@ -50,30 +50,40 @@ inventory --help
 > - `fci-sync` (from `@full-content-inventory/gws-sync`)
 > - `fci-summarize` (from `@full-content-inventory/ai-summarizer`)
 
-### Full pipeline (crawl + sync + summarize)
+### Full pipeline (crawl + summarize + sync)
+```bash
+inventory \
+  --url https://example.com \
+  --client myclient \
+  --project myproject \
+  --provider opencode-go \
+  --model minimax-m2.5 \
+  --folder-id 1aBcD1234...
+```
+
+### Crawl only
+```bash
+inventory --url https://example.com --client myclient --project myproject --skip-summarize --skip-sync
+```
+
+### Summarize existing crawl output
+```bash
+inventory --inventory /path/to/_inventory.csv --provider opencode-go --model minimax-m2.5 --skip-crawl --skip-sync
+```
+
+### Sync to Drive (with AI data already in inventory)
+```bash
+inventory --inventory /path/to/_inventory.csv --folder-id 1aBcD1234... --skip-crawl --skip-summarize
+```
+
+### Crawl + sync without AI summarization
 ```bash
 inventory \
   --url https://example.com \
   --client myclient \
   --project myproject \
   --folder-id 1aBcD1234... \
-  --provider opencode-go \
-  --model minimax-m2.5
-```
-
-### Crawl only
-```bash
-inventory --url https://example.com --client myclient --project myproject --skip-sync --skip-summarize
-```
-
-### Sync existing crawl output
-```bash
-inventory --inventory /path/to/_inventory.csv --folder-id 1aBcD1234... --skip-crawl --skip-summarize
-```
-
-### Summarize existing crawl output
-```bash
-inventory --inventory /path/to/_inventory.csv --provider opencode-go --model minimax-m2.5 --skip-crawl --skip-sync
+  --skip-summarize
 ```
 
 ---
@@ -90,10 +100,10 @@ inventory --inventory /path/to/_inventory.csv --provider opencode-go --model min
 
 ## The Happy Path
 
-1. **Run the full pipeline** with `--url`, `--client`, `--project`, `--folder-id`, `--provider`, `--model`.
+1. **Run the full pipeline** with `--url`, `--client`, `--project`, `--provider`, `--model`, `--folder-id`.
 2. **Crawl stage** downloads pages, writes `.txt` files and `_inventory.csv`.
-3. **Sync stage** uploads `.txt` as Google Docs, mirrors folder tree, uploads inventory as Sheet.
-4. **Summarize stage** classifies each page and writes ≤200-char summaries back to the inventory.
+3. **Summarize stage** classifies each page and writes ≤200-char summaries back to the inventory.
+4. **Sync stage** uploads `.txt` as Google Docs, mirrors folder tree, uploads the enriched inventory (with `Type_de_page` and `Resume_200_chars`) as a Google Sheet.
 5. **All stages complete** → console prints summary. Exit 0.
 
 ---

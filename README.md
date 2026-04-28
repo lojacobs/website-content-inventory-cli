@@ -10,8 +10,8 @@ Full Content Inventory automates the tedious work of cataloguing a website's con
 
 1. **Crawls** the site — downloads pages, strips navigation/ads/scripts, converts HTML to clean text.
 2. **Creates an inventory** — a spreadsheet (`_inventory.csv`) tracking every page with metadata (title, description, word count, language, HTTP status, etc.).
-3. **Syncs to Google Drive** — uploads `.txt` files as Google Docs, mirrors the URL folder structure, and uploads the inventory as a Google Sheet.
-4. **AI-summarizes** — classifies each page into one of 14 types (homepage, service, about, blog-post, etc.) and writes a ≤200-character summary.
+3. **AI-summarizes** — classifies each page into one of 14 types (homepage, service, about, blog-post, etc.) and writes a ≤200-character summary.
+4. **Syncs to Google Drive** — uploads `.txt` files as Google Docs, mirrors the URL folder structure, and uploads the enriched inventory (with AI-generated `Type_de_page` and `Resume_200_chars`) as a Google Sheet.
 
 Each step is **resumable** — if the process crashes or is interrupted, re-run the command and it picks up where it left off.
 
@@ -94,19 +94,19 @@ output/myclient_myproject/example.com/
 └── ...
 ```
 
-### 2. Sync to Google Drive
-```bash
-node src/packages/gws-sync/dist/cli.js \
-  --inventory output/myclient_myproject/example.com/_inventory.csv \
-  --folder-id 1aBcD1234...
-```
-
-### 3. AI-summarize
+### 2. AI-summarize
 ```bash
 node src/packages/ai-summarizer/dist/cli.js \
   --inventory output/myclient_myproject/example.com/_inventory.csv \
   --provider opencode-go \
   --model minimax-m2.5
+```
+
+### 3. Sync to Google Drive (with AI-enriched inventory)
+```bash
+node src/packages/gws-sync/dist/cli.js \
+  --inventory output/myclient_myproject/example.com/_inventory.csv \
+  --folder-id 1aBcD1234...
 ```
 
 ### Or run the full pipeline via the unified CLI
@@ -115,9 +115,9 @@ node src/packages/cli/dist/index.js \
   --url https://example.com \
   --client myclient \
   --project myproject \
-  --folder-id 1aBcD1234... \
   --provider opencode-go \
-  --model minimax-m2.5
+  --model minimax-m2.5 \
+  --folder-id 1aBcD1234...
 ```
 
 ---
@@ -151,10 +151,10 @@ node src/packages/cli/dist/index.js \
 1. **Install prerequisites** (Node, pnpm, wget, gws CLI, Pi auth).
 2. **Run the crawler** with `--url`, `--client`, `--project`.
 3. **Crawl completes** → `_inventory.csv` has rows with `crawl_status=done`, `.txt` files exist in the mirrored directory tree.
-4. **Run the sync** with `--inventory` and `--folder-id`.
-5. **Sync completes** → Google Docs created in mirrored Drive folders, inventory uploaded as Sheet, rows have `sync_status=done` and `Lien_Google_Doc` populated.
-6. **Run the summarizer** with `--inventory`, `--provider`, `--model`.
-7. **Summarize completes** → `Type_de_page` and `Resume_200_chars` filled by AI, `ai_status=done`.
+4. **Run the summarizer** with `--inventory`, `--provider`, `--model`.
+5. **Summarize completes** → `Type_de_page` and `Resume_200_chars` filled by AI, `ai_status=done`.
+6. **Run the sync** with `--inventory` and `--folder-id`.
+7. **Sync completes** → Google Docs created in mirrored Drive folders, the enriched inventory (with AI data) uploaded as a Google Sheet, rows have `sync_status=done` and `Lien_Google_Doc` populated.
 8. **Open the Google Sheet** — all columns populated, ready for review.
 
 ---
