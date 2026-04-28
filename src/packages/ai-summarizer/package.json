@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "type": "module",
   "description": "AI-powered content summarization",
+  "bin": {
+    "fci-summarize": "./dist/cli.js"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -13,12 +16,18 @@
   },
   "scripts": {
     "build": "tsc --build",
-    "clean": "rm -rf dist tsconfig.tsbuildinfo"
+    "clean": "rm -rf dist tsconfig.tsbuildinfo",
+    "test": "vitest run"
   },
   "dependencies": {
-    "@full-content-inventory/shared": "workspace:*"
+    "@full-content-inventory/shared": "workspace:*",
+    "@mariozechner/pi-ai": "*",
+    "@mariozechner/pi-coding-agent": "*",
+    "commander": "*"
   },
   "devDependencies": {
-    "typescript": "^5.4.0"
+    "@types/node": "^25.6.0",
+    "typescript": "^5.4.0",
+    "vitest": "*"
   }
 }
