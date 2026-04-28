@@ -29,6 +29,7 @@ export const INVENTORY_COLUMNS = [
   'crawl_status',
   'sync_status',
   'ai_status',
+  'error_message',
 ] as const;
 
 export { type InventoryColumn };

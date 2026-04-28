@@ -84,6 +84,8 @@ export interface InventoryRow {
   sync_status?: string;
   /** AI processing status: 'done' | 'error' | undefined */
   ai_status?: string;
+  /** Last error message if ai_status === 'error' */
+  error_message?: string;
 }
 
 /**
@@ -109,4 +111,19 @@ export type InventoryColumn =
   | 'Lien_dossier_Drive'
   | 'crawl_status'
   | 'sync_status'
-  | 'ai_status';
+  | 'ai_status'
+  | 'error_message';
+
+/**
+ * Configuration for the AI summarizer pipeline (consumed by ai-summarizer).
+ */
+export interface SummarizeConfig {
+  /** Absolute or relative path to _inventory.csv */
+  inventoryPath: string;
+  /** Provider ID, must match an entry in ~/.pi/agent/auth.json */
+  aiProvider: string;
+  /** Model ID, must match the provider's model list in auth.json */
+  aiModelId: string;
+  /** Defaults to true. Set false (via --no-resume) to re-process done rows. */
+  resume?: boolean;
+}
