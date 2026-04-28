@@ -57,6 +57,6 @@ describe('buildRunPrompt', () => {
     const run = buildRunPrompt('CUSTOM-SYS');
     await run('q', { provider: 'opencode-go', modelId: 'minimax-m2.5' });
     const ctorArg = (sdk.DefaultResourceLoader as unknown as ReturnType<typeof vi.fn>).mock.calls[0][0];
-    expect(ctorArg.systemPromptOverride()).toBe('CUSTOM-SYS');
+    expect(ctorArg.systemPrompt).toBe('CUSTOM-SYS');
   });
 });

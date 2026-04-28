@@ -23,13 +23,15 @@ export function buildRunPrompt(systemPrompt: string) {
     const modelRegistry = ModelRegistry.create(authStorage);
 
     const loader = new DefaultResourceLoader({
-      systemPromptOverride: () => systemPrompt,
+      cwd: process.cwd(),
+      agentDir: process.cwd(),
+      systemPrompt,
     });
     await loader.reload();
 
     const model =
       modelRegistry.find?.(opts.provider, opts.modelId) ??
-      getModel(opts.provider, opts.modelId) ??
+      getModel(opts.provider as any, opts.modelId as any) ??
       undefined;
 
     const { session } = await createAgentSession({
